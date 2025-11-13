@@ -13,3 +13,22 @@ This project uses:
 ---
 
 ## 📁 Project Structure
+
+- backend/
+  - app.py # Flask API exposing /stats
+  - analyze_fluxcloud.py # Standalone analysis script
+  - requirements.txt # Python dependencies
+
+- frontend/
+  - index.html # Basic dashboard UI
+  - styles.css # Minimal styling
+  - app.js # Fetches /stats and updates UI
+
+---
+
+## 🚀 Backend Setup
+
+### Install dependencies
+```bash
+cd backend
+pip install -r requirements.txt
