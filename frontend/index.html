@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>FluxCloud Revenue Dashboard</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<h1>FluxCloud Revenue Overview</h1>
+
+<div id="loading">Loading data...</div>
+
+<div id="content" class="hidden">
+    <div class="stat-box">
+        <h3>Total Applications</h3>
+        <p id="total-apps">–</p>
+    </div>
+
+    <div class="stat-box">
+        <h3>Marketplace Apps</h3>
+        <p id="marketplace-apps">–</p>
+    </div>
+
+    <div class="stat-box">
+        <h3>Custom Apps</h3>
+        <p id="custom-apps">–</p>
+    </div>
+
+    <h2>Top 5 Marketplace Apps</h2>
+    <table id="top5-table">
+        <thead>
+            <tr>
+                <th>App Name</th>
+                <th>Deployments</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
