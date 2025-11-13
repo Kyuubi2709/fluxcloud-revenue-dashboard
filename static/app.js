@@ -6,7 +6,7 @@ async function loadStats() {
         document.getElementById("loading").classList.add("hidden");
         document.getElementById("content").classList.remove("hidden");
 
-        // BASIC METRICS
+        // BASIC COUNTS
         document.getElementById("total-apps").textContent = data.total_apps;
         document.getElementById("marketplace-apps").textContent = data.marketplace_apps;
         document.getElementById("custom-apps").textContent = data.custom_apps;
@@ -20,15 +20,21 @@ async function loadStats() {
         document.getElementById("company-deployments").textContent = data.company_deployments;
         document.getElementById("company-instances").textContent = data.company_instances;
 
-        // CONTACT METRICS
+        // CONTACT METRICS (MARKETPLACE)
         document.getElementById("marketplace-with-contacts").textContent = data.marketplace_with_contacts;
         document.getElementById("marketplace-contact-pct").textContent = data.marketplace_contact_pct + "%";
 
-        // NEW FLAGS (ALL APPS)
+        // NEW CONTACT METRICS (TOTAL)
+        document.getElementById("total-with-contacts").textContent = data.total_with_contacts;
+        document.getElementById("total-contact-pct").textContent = data.total_contact_pct + "%";
+
+        // NEW CONTACT METRICS (CUSTOM)
+        document.getElementById("custom-with-contacts").textContent = data.custom_with_contacts;
+        document.getElementById("custom-contact-pct").textContent = data.custom_contact_pct + "%";
+
+        // SECRETS & STATICIP FLAGS (ALREADY ADDED)
         document.getElementById("total-with-secrets").textContent = data.total_with_secrets;
         document.getElementById("total-with-staticip").textContent = data.total_with_staticip;
-
-        // NEW FLAGS (MARKETPLACE)
         document.getElementById("marketplace-with-secrets").textContent = data.marketplace_with_secrets;
         document.getElementById("marketplace-with-staticip").textContent = data.marketplace_with_staticip;
 
@@ -38,15 +44,7 @@ async function loadStats() {
 
         data.top_marketplace_apps.forEach(app => {
             const row = document.createElement("tr");
-
-            const nameCell = document.createElement("td");
-            nameCell.textContent = app.name;
-
-            const countCell = document.createElement("td");
-            countCell.textContent = app.deployments;
-
-            row.appendChild(nameCell);
-            row.appendChild(countCell);
+            row.innerHTML = `<td>${app.name}</td><td>${app.deployments}</td>`;
             tbody.appendChild(row);
         });
 
