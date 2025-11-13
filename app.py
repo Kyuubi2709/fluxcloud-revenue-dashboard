@@ -81,7 +81,7 @@ def analyze_apps(apps):
         instances = int(app_info.get("instances", 0))
 
         contacts = app_info.get("contacts", [])
-        secrets = app_info.get("secrets", [])
+        secrets = app_info.get("secrets", "")
         staticip = app_info.get("staticip", False)
 
         total_instances += instances
@@ -91,18 +91,21 @@ def analyze_apps(apps):
             company_deployments += 1
             company_instances += instances
 
-        # global contact usage
+        # ----- CONTACT USAGE -----
         if isinstance(contacts, list) and len(contacts) > 0:
             total_with_contacts += 1
 
-        # global flags
-        if isinstance(secrets, list) and len(secrets) > 0:
+        # ----- SECRET DETECTION (fixed) -----
+        has_secrets = isinstance(secrets, str) and secrets.strip() != ""
+
+        if has_secrets:
             total_with_secrets += 1
 
+        # ----- STATIC IP -----
         if bool(staticip) is True:
             total_with_staticip += 1
 
-        # marketplace detection
+        # ----- MARKETPLACE OR CUSTOM -----
         is_marketplace = bool(TIMESTAMP_REGEX.search(name))
 
         if is_marketplace:
@@ -111,7 +114,7 @@ def analyze_apps(apps):
             if isinstance(contacts, list) and len(contacts) > 0:
                 marketplace_with_contacts += 1
 
-            if isinstance(secrets, list) and len(secrets) > 0:
+            if has_secrets:
                 marketplace_with_secrets += 1
 
             if bool(staticip) is True:
