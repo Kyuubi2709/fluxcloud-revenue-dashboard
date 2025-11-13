@@ -18,6 +18,9 @@ async function loadStats() {
         document.getElementById("company-deployments").textContent = data.company_deployments;
         document.getElementById("company-instances").textContent = data.company_instances;
 
+        document.getElementById("marketplace-with-contacts").textContent = data.marketplace_with_contacts;
+        document.getElementById("marketplace-contact-pct").textContent = data.marketplace_contact_pct + "%";
+
         // Top 5 marketplace apps
         const tbody = document.querySelector("#top5-table tbody");
         tbody.innerHTML = "";
