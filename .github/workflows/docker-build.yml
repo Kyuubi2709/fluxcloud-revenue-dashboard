@@ -1,4 +1,4 @@
-name: DockerHub Build (Debug)
+name: DockerHub Build
 
 on:
   push:
@@ -11,11 +11,12 @@ on:
 jobs:
   docker:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout repo
+      - name: Checkout Repository
         uses: actions/checkout@v3
 
-      - name: Set up QEMU
+      - name: Set up QEMU (for multi-architecture)
         uses: docker/setup-qemu-action@v2
 
       - name: Set up Docker Buildx
@@ -27,24 +28,24 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      # Debug build step - shows full pip install logs
-      - name: Build and show logs
+      # Debug build (no push)
+      - name: Build Debug Image (No Push)
         run: |
           echo "===== Starting Debug Build ====="
           docker buildx build \
             --progress=plain \
             --no-cache \
-            --tag kyuubi2709/revenue-tracker:debug \
-            --file backend/dockerfile \
-            backend
+            --tag ${{ secrets.DOCKER_USERNAME }}/revenue-tracker:debug \
+            -f Dockerfile \
+            .
 
-      # Optional: push to DockerHub only if build succeeds
-      - name: Push final image
-        if: success()
+      # Push final image to DockerHub
+      - name: Build and Push Production Image
         run: |
-          echo "===== Pushing final image to DockerHub ====="
+          echo "===== Building and Pushing Image ====="
           docker buildx build \
+            --platform linux/amd64,linux/arm64 \
             --push \
-            --tag kyuubi2709/revenue-tracker:latest \
-            --file backend/dockerfile \
-            backend
+            --tag ${{ secrets.DOCKER_USERNAME }}/revenue-tracker:latest \
+            -f Dockerfile \
+            .
