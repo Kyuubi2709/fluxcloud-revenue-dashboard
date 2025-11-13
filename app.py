@@ -30,7 +30,7 @@ def login_required(route_function):
 
 
 ### -------------------------
-### FETCHING APPS
+### FETCH APPS
 ### -------------------------
 def fetch_apps():
     try:
@@ -69,38 +69,65 @@ def analyze_apps(apps):
 
     marketplace_with_contacts = 0
 
+    # NEW REQUESTED METRICS
+    total_with_secrets = 0
+    total_with_staticip = 0
+
+    marketplace_with_secrets = 0
+    marketplace_with_staticip = 0
+
     for app_info in apps:
         name = app_info.get("name", "")
         owner = app_info.get("owner", "")
         instances = int(app_info.get("instances", 0))
+
         contacts = app_info.get("contacts", [])
+        secrets = app_info.get("secrets", [])
+        staticip = app_info.get("staticip", False)
 
         total_instances += instances
 
+        # count company-owned usage
         if owner == TARGET_OWNER:
             company_deployments += 1
             company_instances += instances
 
-        if TIMESTAMP_REGEX.search(name):
+        # ----- GLOBAL METRICS -----
+        if isinstance(secrets, list) and len(secrets) > 0:
+            total_with_secrets += 1
+
+        if bool(staticip) is True:
+            total_with_staticip += 1
+
+        # ----- MARKETPLACE DETECTION -----
+        is_marketplace = bool(TIMESTAMP_REGEX.search(name))
+
+        if is_marketplace:
             marketplace.append(name)
 
-            # count marketplace deployments with contacts
+            # marketplace contacts
             if isinstance(contacts, list) and len(contacts) > 0:
                 marketplace_with_contacts += 1
+
+            # marketplace secrets
+            if isinstance(secrets, list) and len(secrets) > 0:
+                marketplace_with_secrets += 1
+
+            # marketplace staticip:true
+            if bool(staticip) is True:
+                marketplace_with_staticip += 1
 
         else:
             custom.append(name)
 
-    # Group marketplace base names for the top 5
+    # top 5 marketplace templates
     base_names = [TIMESTAMP_REGEX.sub("", name) for name in marketplace]
     counts = Counter(base_names)
     top5 = counts.most_common(5)
 
-    if total > 0:
-        marketplace_pct = round((len(marketplace) / total) * 100, 2)
-        custom_pct = round((len(custom) / total) * 100, 2)
-    else:
-        marketplace_pct = custom_pct = 0.0
+    # existing percentages
+    marketplace_pct = round((len(marketplace) / total) * 100, 2) if total else 0.0
+    custom_pct = round((len(custom) / total) * 100, 2) if total else 0.0
 
     if len(marketplace) > 0:
         marketplace_contact_pct = round((marketplace_with_contacts / len(marketplace)) * 100, 2)
@@ -111,13 +138,23 @@ def analyze_apps(apps):
         "total_apps": total,
         "marketplace_apps": len(marketplace),
         "custom_apps": len(custom),
+
         "marketplace_pct": marketplace_pct,
         "custom_pct": custom_pct,
+
         "total_instances": total_instances,
         "company_deployments": company_deployments,
         "company_instances": company_instances,
+
         "marketplace_with_contacts": marketplace_with_contacts,
         "marketplace_contact_pct": marketplace_contact_pct,
+
+        # --- NEW FLAG METRICS ---
+        "total_with_secrets": total_with_secrets,
+        "total_with_staticip": total_with_staticip,
+        "marketplace_with_secrets": marketplace_with_secrets,
+        "marketplace_with_staticip": marketplace_with_staticip,
+
         "top_marketplace_apps": [
             {"name": n, "deployments": c} for n, c in top5
         ],
