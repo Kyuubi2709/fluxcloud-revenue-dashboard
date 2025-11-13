@@ -30,7 +30,7 @@ def login_required(route_function):
 
 
 ### -------------------------
-### API FETCHING
+### FETCHING APPS
 ### -------------------------
 def fetch_apps():
     try:
@@ -39,17 +39,14 @@ def fetch_apps():
 
         data = resp.json()
 
-        # Normal expected structure
         if isinstance(data, dict) and "data" in data:
             apps = data["data"]
         elif isinstance(data, list):
             apps = data
         else:
-            print("Unexpected API structure:", type(data), data)
             return []
 
-        apps = [a for a in apps if isinstance(a, dict)]
-        return apps
+        return [a for a in apps if isinstance(a, dict)]
 
     except Exception as e:
         print("FETCH ERROR:", e)
@@ -57,7 +54,7 @@ def fetch_apps():
 
 
 ### -------------------------
-### DATA ANALYSIS
+### ANALYZE APPS
 ### -------------------------
 def analyze_apps(apps):
     apps = [a for a in apps if isinstance(a, dict)]
@@ -70,10 +67,13 @@ def analyze_apps(apps):
     company_deployments = 0
     company_instances = 0
 
+    marketplace_with_contacts = 0
+
     for app_info in apps:
         name = app_info.get("name", "")
         owner = app_info.get("owner", "")
         instances = int(app_info.get("instances", 0))
+        contacts = app_info.get("contacts", [])
 
         total_instances += instances
 
@@ -83,9 +83,15 @@ def analyze_apps(apps):
 
         if TIMESTAMP_REGEX.search(name):
             marketplace.append(name)
+
+            # count marketplace deployments with contacts
+            if isinstance(contacts, list) and len(contacts) > 0:
+                marketplace_with_contacts += 1
+
         else:
             custom.append(name)
 
+    # Group marketplace base names for the top 5
     base_names = [TIMESTAMP_REGEX.sub("", name) for name in marketplace]
     counts = Counter(base_names)
     top5 = counts.most_common(5)
@@ -96,6 +102,11 @@ def analyze_apps(apps):
     else:
         marketplace_pct = custom_pct = 0.0
 
+    if len(marketplace) > 0:
+        marketplace_contact_pct = round((marketplace_with_contacts / len(marketplace)) * 100, 2)
+    else:
+        marketplace_contact_pct = 0.0
+
     return {
         "total_apps": total,
         "marketplace_apps": len(marketplace),
@@ -105,6 +116,8 @@ def analyze_apps(apps):
         "total_instances": total_instances,
         "company_deployments": company_deployments,
         "company_instances": company_instances,
+        "marketplace_with_contacts": marketplace_with_contacts,
+        "marketplace_contact_pct": marketplace_contact_pct,
         "top_marketplace_apps": [
             {"name": n, "deployments": c} for n, c in top5
         ],
@@ -114,7 +127,6 @@ def analyze_apps(apps):
 ### -------------------------
 ### ROUTES
 ### -------------------------
-
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
