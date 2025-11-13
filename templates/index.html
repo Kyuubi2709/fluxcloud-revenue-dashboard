@@ -12,19 +12,57 @@
 <div id="loading">Loading data...</div>
 
 <div id="content" class="hidden">
-    <div class="stat-box">
-        <h3>Total Applications</h3>
-        <p id="total-apps">–</p>
+
+    <!-- Existing Boxes -->
+    <div class="stat-grid">
+
+        <div class="stat-box">
+            <h3>Total Applications</h3>
+            <p id="total-apps">–</p>
+        </div>
+
+        <div class="stat-box">
+            <h3>Marketplace Apps</h3>
+            <p id="marketplace-apps">–</p>
+        </div>
+
+        <div class="stat-box">
+            <h3>Custom Apps</h3>
+            <p id="custom-apps">–</p>
+        </div>
+
     </div>
 
-    <div class="stat-box">
-        <h3>Marketplace Apps</h3>
-        <p id="marketplace-apps">–</p>
-    </div>
+    <!-- NEW METRIC BOXES -->
+    <h2>Additional Metrics</h2>
 
-    <div class="stat-box">
-        <h3>Custom Apps</h3>
-        <p id="custom-apps">–</p>
+    <div class="stat-grid">
+
+        <div class="stat-box">
+            <h3>Marketplace %</h3>
+            <p id="marketplace-pct">–</p>
+        </div>
+
+        <div class="stat-box">
+            <h3>Custom %</h3>
+            <p id="custom-pct">–</p>
+        </div>
+
+        <div class="stat-box">
+            <h3>Total Instances</h3>
+            <p id="total-instances">–</p>
+        </div>
+
+        <div class="stat-box">
+            <h3>Company Deployments</h3>
+            <p id="company-deployments">–</p>
+        </div>
+
+        <div class="stat-box">
+            <h3>Company Instances</h3>
+            <p id="company-instances">–</p>
+        </div>
+
     </div>
 
     <h2>Top 5 Marketplace Apps</h2>
@@ -37,6 +75,7 @@
         </thead>
         <tbody></tbody>
     </table>
+
 </div>
 
 <script src="/static/app.js"></script>
