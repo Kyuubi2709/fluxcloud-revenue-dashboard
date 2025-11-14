@@ -57,7 +57,7 @@ def fetch_apps():
 # ---------------------------
 def analyze_apps(apps):
 
-    # ensure only dictionaries
+    # ensure only objects
     apps = [a for a in apps if isinstance(a, dict)]
 
     total = len(apps)
@@ -68,16 +68,23 @@ def analyze_apps(apps):
     company_deployments = 0
     company_instances = 0
 
-    # CONTACT METRICS
+    # CONTACTS
     total_with_contacts = 0
     marketplace_with_contacts = 0
     custom_with_contacts = 0
 
-    # SECRET / STATICIP METRICS
+    # SECRETS / STATICIP
     total_with_secrets = 0
     total_with_staticip = 0
     marketplace_with_secrets = 0
     marketplace_with_staticip = 0
+
+    # NEW METRICS
+    unique_owners = set()
+
+    total_cpu = 0.0
+    total_ram_mb = 0.0
+    total_hdd_gb = 0.0
 
     for app_info in apps:
 
@@ -87,10 +94,22 @@ def analyze_apps(apps):
         contacts = app_info.get("contacts", [])
         staticip = app_info.get("staticip", False)
 
-        # FIX: Extract secrets correctly
+        # collect owner
+        if owner:
+            unique_owners.add(owner)
+
+        # RESOURCES
+        cpu = float(app_info.get("cpu", 0))
+        ram = float(app_info.get("ram", 0))      # MB
+        hdd = float(app_info.get("hdd", 0))      # GB
+
+        total_cpu += cpu
+        total_ram_mb += ram
+        total_hdd_gb += hdd
+
+        # secrets (root or compose)
         secrets = app_info.get("secrets", "")
 
-        # sometimes secrets live inside compose[0]
         if not secrets:
             compose = app_info.get("compose", [])
             if isinstance(compose, list) and len(compose) > 0:
@@ -98,30 +117,29 @@ def analyze_apps(apps):
                 if isinstance(first_block, dict):
                     secrets = first_block.get("secrets", "")
 
-        # A secret exists if it's a non-empty string
         has_secrets = isinstance(secrets, str) and secrets.strip() != ""
 
-        # instance counting
+        # instances
         total_instances += instances
 
-        # company specific stats
+        # company stats
         if owner == TARGET_OWNER:
             company_deployments += 1
             company_instances += instances
 
-        # contact metrics
+        # contacts
         has_contacts = isinstance(contacts, list) and len(contacts) > 0
         if has_contacts:
             total_with_contacts += 1
 
-        # global secret/staticip metrics
+        # flags
         if has_secrets:
             total_with_secrets += 1
 
         if bool(staticip) is True:
             total_with_staticip += 1
 
-        # determine marketplace app
+        # marketplace
         is_marketplace = bool(TIMESTAMP_REGEX.search(name))
 
         if is_marketplace:
@@ -136,22 +154,27 @@ def analyze_apps(apps):
 
         else:
             custom.append(name)
+
             if has_contacts:
                 custom_with_contacts += 1
 
-    # top marketplace templates (group by prefix)
+    # grouping marketplace templates
     base_names = [TIMESTAMP_REGEX.sub("", name) for name in marketplace]
     counts = Counter(base_names)
     top5 = counts.most_common(5)
 
-    # Percentages
-    marketplace_pct = round((len(marketplace) / total) * 100, 2) if total else 0.0
-    custom_pct = round((len(custom) / total) * 100, 2) if total else 0.0
+    # percentages
+    marketplace_pct = round((len(marketplace) / total) * 100, 2) if total else 0
+    custom_pct = round((len(custom) / total) * 100, 2) if total else 0
 
-    # Contact percentages
-    total_contact_pct = round((total_with_contacts / total) * 100, 2) if total else 0.0
-    marketplace_contact_pct = round((marketplace_with_contacts / len(marketplace)) * 100, 2) if len(marketplace) else 0.0
-    custom_contact_pct = round((custom_with_contacts / len(custom)) * 100, 2) if len(custom) else 0.0
+    total_contact_pct = round((total_with_contacts / total) * 100, 2) if total else 0
+    marketplace_contact_pct = round((marketplace_with_contacts / len(marketplace)) * 100, 2) if marketplace else 0
+    custom_contact_pct = round((custom_with_contacts / len(custom)) * 100, 2) if custom else 0
+
+    # resource conversions
+    ram_gb = total_ram_mb / 1024
+    ram_tb = ram_gb / 1024
+    hdd_tb = total_hdd_gb / 1024
 
     return {
         # totals
@@ -163,12 +186,12 @@ def analyze_apps(apps):
         "marketplace_pct": marketplace_pct,
         "custom_pct": custom_pct,
 
-        # instances + company stats
+        # instances + company
         "total_instances": total_instances,
         "company_deployments": company_deployments,
         "company_instances": company_instances,
 
-        # contact stats
+        # contacts
         "total_with_contacts": total_with_contacts,
         "total_contact_pct": total_contact_pct,
         "marketplace_with_contacts": marketplace_with_contacts,
@@ -176,13 +199,22 @@ def analyze_apps(apps):
         "custom_with_contacts": custom_with_contacts,
         "custom_contact_pct": custom_contact_pct,
 
-        # secret & staticIP
+        # flags
         "total_with_secrets": total_with_secrets,
         "total_with_staticip": total_with_staticip,
         "marketplace_with_secrets": marketplace_with_secrets,
         "marketplace_with_staticip": marketplace_with_staticip,
 
-        # top marketplace apps
+        # NEW METRICS
+        "total_unique_owners": len(unique_owners),
+
+        # RESOURCES
+        "total_cpu": round(total_cpu, 2),
+        "total_ram_gb": round(ram_gb, 2),
+        "total_ram_tb": round(ram_tb, 4),
+        "total_hdd_tb": round(hdd_tb, 4),
+
+        # top marketplace
         "top_marketplace_apps": [
             {"name": n, "deployments": c}
             for n, c in top5
