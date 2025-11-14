@@ -28,14 +28,15 @@ def fetch_nodes():
         return []
 
 
-def main():
+def update_cache():
+    """Fetch fresh stats and write them into the cache file."""
     print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Updating cache...")
 
     try:
         apps = fetch_apps()
         nodes = fetch_nodes()
 
-        # Run main analytics
+        # Run main analytics from app.py
         from app import analyze_apps as full_analyzer
         stats = full_analyzer(apps, nodes)
 
@@ -52,5 +53,6 @@ def main():
         print(f"[ERROR] Failed to update cache: {e}")
 
 
+# If manually executed
 if __name__ == "__main__":
-    main()
+    update_cache()
