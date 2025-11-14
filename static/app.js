@@ -18,6 +18,18 @@ function formatTB(val) {
     return Number(val).toFixed(2) + " TB";
 }
 
+function setLastUpdate(ts) {
+    const el = document.getElementById("last-update");
+    if (!el) return;
+
+    if (!ts) {
+        el.textContent = "Last update: –";
+        return;
+    }
+    const d = new Date(ts * 1000);
+    el.textContent = "Last update: " + d.toLocaleString();
+}
+
 async function loadStats() {
     try {
         const resp = await fetch("/stats");
@@ -25,6 +37,8 @@ async function loadStats() {
 
         document.getElementById("loading").classList.add("hidden");
         document.getElementById("content").classList.remove("hidden");
+
+        setLastUpdate(data.last_update_ts);
 
         // BASIC COUNTS
         document.getElementById("total-apps").textContent = data.total_apps;
@@ -137,7 +151,7 @@ async function loadStats() {
         const tbody = document.querySelector("#top5-table tbody");
         tbody.innerHTML = "";
 
-        data.top_marketplace_apps.forEach(app => {
+        (data.top_marketplace_apps || []).forEach(app => {
             const row = document.createElement("tr");
             row.innerHTML = `<td>${app.name}</td><td>${app.deployments}</td>`;
             tbody.appendChild(row);
@@ -149,4 +163,27 @@ async function loadStats() {
     }
 }
 
-loadStats();
+// Manual refresh button
+document.addEventListener("DOMContentLoaded", () => {
+    const btn = document.getElementById("refresh-button");
+    if (btn) {
+        btn.addEventListener("click", async () => {
+            try {
+                btn.disabled = true;
+                btn.textContent = "Refreshing...";
+                const resp = await fetch("/refresh-now", { method: "POST" });
+                const result = await resp.json();
+                console.log("Refresh result:", result);
+                await loadStats();
+            } catch (e) {
+                console.error("Error triggering refresh:", e);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = "Refresh Now";
+            }
+        });
+    }
+
+    // initial load
+    loadStats();
+});
