@@ -20,23 +20,29 @@ async function loadStats() {
         document.getElementById("company-deployments").textContent = data.company_deployments;
         document.getElementById("company-instances").textContent = data.company_instances;
 
-        // CONTACT METRICS (MARKETPLACE)
+        // UNIQUE OWNERS
+        document.getElementById("total-unique-owners").textContent = data.total_unique_owners;
+
+        // CONTACT METRICS
         document.getElementById("marketplace-with-contacts").textContent = data.marketplace_with_contacts;
         document.getElementById("marketplace-contact-pct").textContent = data.marketplace_contact_pct + "%";
 
-        // NEW CONTACT METRICS (TOTAL)
         document.getElementById("total-with-contacts").textContent = data.total_with_contacts;
         document.getElementById("total-contact-pct").textContent = data.total_contact_pct + "%";
 
-        // NEW CONTACT METRICS (CUSTOM)
         document.getElementById("custom-with-contacts").textContent = data.custom_with_contacts;
         document.getElementById("custom-contact-pct").textContent = data.custom_contact_pct + "%";
 
-        // SECRETS & STATICIP FLAGS (ALREADY ADDED)
+        // FLAGS
         document.getElementById("total-with-secrets").textContent = data.total_with_secrets;
         document.getElementById("total-with-staticip").textContent = data.total_with_staticip;
         document.getElementById("marketplace-with-secrets").textContent = data.marketplace_with_secrets;
         document.getElementById("marketplace-with-staticip").textContent = data.marketplace_with_staticip;
+
+        // RESOURCES
+        document.getElementById("total-cpu").textContent = data.total_cpu + " vCPU";
+        document.getElementById("total-ram").textContent = `${data.total_ram_gb} GB (${data.total_ram_tb} TB)`;
+        document.getElementById("total-hdd").textContent = `${data.total_hdd_tb} TB`;
 
         // TOP 5
         const tbody = document.querySelector("#top5-table tbody");
