@@ -1,3 +1,16 @@
+function formatStorage(gb) {
+    if (gb === null || gb === undefined || isNaN(gb)) {
+        return "–";
+    }
+
+    const value = Number(gb);
+    if (value >= 1000) {
+        const tb = value / 1000;
+        return tb.toFixed(2) + " TB";
+    }
+    return value.toFixed(2) + " GB";
+}
+
 async function loadStats() {
     try {
         const resp = await fetch("/stats");
@@ -40,8 +53,8 @@ async function loadStats() {
 
         // RESOURCES
         document.getElementById("total-cpu").textContent = `${data.total_cpu} vCPU`;
-        document.getElementById("total-ram").textContent = `${data.total_ram_gb} GB (${data.total_ram_tb} TB)`;
-        document.getElementById("total-hdd").textContent = `${data.total_hdd_gb} GB (${data.total_hdd_tb} TB)`;
+        document.getElementById("total-ram").textContent = formatStorage(data.total_ram_gb);
+        document.getElementById("total-hdd").textContent = formatStorage(data.total_hdd_gb);
 
         // TOP 5
         const tbody = document.querySelector("#top5-table tbody");
