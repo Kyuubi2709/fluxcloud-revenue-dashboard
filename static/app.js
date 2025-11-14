@@ -20,7 +20,6 @@ function formatTB(val) {
 
 async function loadStats() {
     try {
-        // IMPORTANT: include session cookies
         const resp = await fetch("/stats", {
             credentials: "include"
         });
@@ -163,27 +162,51 @@ loadStats();
 
 
 // --------------------------------------------------------
-// MANUAL REFRESH BUTTON
+// MANUAL REFRESH BUTTON + SPINNER + POLLING
 // --------------------------------------------------------
 document.getElementById("refresh-btn").addEventListener("click", async () => {
     const statusEl = document.getElementById("refresh-status");
+    const spinner = document.getElementById("spinner");
+    const lastTimeBefore = document.getElementById("last-updated").textContent;
+
     statusEl.textContent = "Refreshing...";
+    spinner.classList.remove("hidden");
 
     const resp = await fetch("/refresh", {
         method: "POST",
-        credentials: "include"   // IMPORTANT
+        credentials: "include"
     });
 
     const data = await resp.json();
 
     if (data.status === "ok") {
         statusEl.textContent = "Refresh started — updating shortly...";
-        setTimeout(loadStats, 5000);
+
+        // Poll every 2 seconds until timestamp updates
+        const poll = setInterval(async () => {
+            const statsResp = await fetch("/stats", { credentials: "include" });
+            const stats = await statsResp.json();
+
+            const newTime =
+                "Last updated: " + new Date(stats.last_updated).toLocaleString();
+
+            if (newTime !== lastTimeBefore) {
+                document.getElementById("last-updated").textContent = newTime;
+
+                clearInterval(poll);
+                spinner.classList.add("hidden");
+                statusEl.textContent = "";
+
+                loadStats();
+            }
+        }, 2000);
     }
     else if (data.status === "cooldown") {
         statusEl.textContent = data.message;
+        spinner.classList.add("hidden");
     }
     else {
         statusEl.textContent = "Failed to refresh.";
+        spinner.classList.add("hidden");
     }
 });
