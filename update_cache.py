@@ -1,26 +1,58 @@
+import os
 import json
 import time
-from app import fetch_apps, fetch_nodes, analyze_apps
+import traceback
+from datetime import datetime
 
-CACHE_FILE = "cache/stats.json"
+import requests
+from app import fetch_apps, fetch_nodes, analyze_apps   # reuse your existing logic
+
+CACHE_DIR = "cache"
+CACHE_FILE = os.path.join(CACHE_DIR, "stats.json")
+TEMP_FILE = os.path.join(CACHE_DIR, "stats.tmp")
+
+
+def log(msg):
+    """Small logger with timestamps."""
+    print(f"[{datetime.utcnow().isoformat()}] {msg}", flush=True)
 
 
 def update_cache():
-    print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Updating cache...")
-
+    """Fetch apps + nodes, analyze them, then write a fresh JSON cache."""
     try:
+        log("Updating cache...")
+
+        # Ensure cache directory exists
+        os.makedirs(CACHE_DIR, exist_ok=True)
+
+        # Fetch data
         apps = fetch_apps()
         nodes = fetch_nodes()
 
-        stats = analyze_apps(apps, nodes)
+        # Analyze
+        data = analyze_apps(apps, nodes)
 
-        with open(CACHE_FILE, "w") as f:
-            json.dump(stats, f)
+        # Write atomically: write → flush → replace
+        with open(TEMP_FILE, "w") as f:
+            json.dump(data, f, indent=2)
 
-        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Cache updated successfully.")
+        os.replace(TEMP_FILE, CACHE_FILE)
+
+        log("Cache update completed successfully.")
+        return True
 
     except Exception as e:
-        print(f"[ERROR] Failed to update cache: {e}")
+        log(f"[ERROR] Failed to update cache: {e}")
+        traceback.print_exc()
+
+        # Cleanup temp file if it exists
+        if os.path.exists(TEMP_FILE):
+            try:
+                os.remove(TEMP_FILE)
+            except:
+                pass
+
+        return False
 
 
 if __name__ == "__main__":
