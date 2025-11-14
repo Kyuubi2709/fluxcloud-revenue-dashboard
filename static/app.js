@@ -11,6 +11,13 @@ function formatStorage(gb) {
     return value.toFixed(2) + " GB";
 }
 
+function formatTB(val) {
+    if (val === null || val === undefined || isNaN(val)) {
+        return "0.00 TB";
+    }
+    return Number(val).toFixed(2) + " TB";
+}
+
 async function loadStats() {
     try {
         const resp = await fetch("/stats");
@@ -51,10 +58,80 @@ async function loadStats() {
         document.getElementById("marketplace-with-secrets").textContent = data.marketplace_with_secrets;
         document.getElementById("marketplace-with-staticip").textContent = data.marketplace_with_staticip;
 
-        // RESOURCES
+        // ----------------------
+        // RESOURCES (APPS)
+        // ----------------------
         document.getElementById("total-cpu").textContent = `${data.total_cpu} vCPU`;
         document.getElementById("total-ram").textContent = formatStorage(data.total_ram_gb);
         document.getElementById("total-hdd").textContent = formatStorage(data.total_hdd_gb);
+
+        // ----------------------
+        // RESOURCE USAGE BY TIER
+        // ----------------------
+        const tierUsage = data.tier_usage || {};
+
+        function fillTierUsage(tierKey) {
+            const lower = tierKey.toLowerCase();
+            const u = tierUsage[tierKey] || {};
+
+            const instEl = document.getElementById(`tier-${lower}-instances`);
+            const cpuEl = document.getElementById(`tier-${lower}-cpu`);
+            const ramEl = document.getElementById(`tier-${lower}-ram`);
+            const hddEl = document.getElementById(`tier-${lower}-hdd`);
+
+            if (instEl) instEl.textContent = u.instances ?? 0;
+            if (cpuEl) cpuEl.textContent = (u.cpu ?? 0) + " vCPU";
+            if (ramEl) ramEl.textContent = formatStorage(u.ram_gb);
+            if (hddEl) hddEl.textContent = formatStorage(u.hdd_gb);
+        }
+
+        ["CUMULUS", "NIMBUS", "STRATUS"].forEach(fillTierUsage);
+
+        // ----------------------
+        // NETWORK CAPACITY (ALL TIERS)
+        // ----------------------
+        document.getElementById("network-total-cpu").textContent =
+            (data.network_total_cpu ?? 0) + " vCPU";
+
+        document.getElementById("network-total-ram").textContent =
+            formatTB(data.network_total_ram_tb);
+
+        document.getElementById("network-total-hdd").textContent =
+            formatTB(data.network_total_hdd_tb);
+
+        // ----------------------
+        // NETWORK CAPACITY BY TIER
+        // ----------------------
+        const tierCap = data.tier_capacity || {};
+
+        function fillTierCap(tierKey) {
+            const lower = tierKey.toLowerCase();
+            const c = tierCap[tierKey] || {};
+
+            const nodesEl = document.getElementById(`network-${lower}-nodes`);
+            const cpuEl = document.getElementById(`network-${lower}-cpu`);
+            const ramEl = document.getElementById(`network-${lower}-ram`);
+            const hddEl = document.getElementById(`network-${lower}-hdd`);
+
+            if (nodesEl) nodesEl.textContent = c.nodes ?? 0;
+            if (cpuEl) cpuEl.textContent = (c.cpu ?? 0) + " vCPU";
+            if (ramEl) ramEl.textContent = formatTB(c.ram_tb);
+            if (hddEl) hddEl.textContent = formatTB(c.hdd_tb);
+        }
+
+        ["CUMULUS", "NIMBUS", "STRATUS"].forEach(fillTierCap);
+
+        // ----------------------
+        // NETWORK UTILIZATION
+        // ----------------------
+        document.getElementById("cpu-util-pct").textContent =
+            (data.cpu_util_pct ?? 0) + "%";
+
+        document.getElementById("ram-util-pct").textContent =
+            (data.ram_util_pct ?? 0) + "%";
+
+        document.getElementById("hdd-util-pct").textContent =
+            (data.hdd_util_pct ?? 0) + "%";
 
         // TOP 5
         const tbody = document.querySelector("#top5-table tbody");
