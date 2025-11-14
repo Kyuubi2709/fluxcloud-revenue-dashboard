@@ -13,7 +13,7 @@ LOGIN_USER = "fluxcloud"
 LOGIN_PASS = "fluxcloud123"
 
 API_URL_APPS = "https://api.runonflux.io/apps/globalappsspecifications"
-API_URL_NODES = "https://api.runonflux.io/daemon/viewdeterministiczelnodes"
+API_URL_NODES = "https://api.runonflux.io/daemon/viewdeterministicfluxnodelist"
 
 TIMESTAMP_REGEX = re.compile(r"\d{10,}$")
 
