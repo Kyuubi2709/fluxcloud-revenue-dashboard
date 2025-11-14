@@ -2,9 +2,6 @@ from flask import Flask, jsonify, render_template, request, redirect, url_for, s
 import requests
 import re
 from collections import Counter
-import threading
-import time
-from urllib.parse import quote
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
 
@@ -15,10 +12,8 @@ app.secret_key = "fluxcloud_dashboard_secret"
 LOGIN_USER = "fluxcloud"
 LOGIN_PASS = "fluxcloud123"
 
-# APIs
 API_URL_APPS = "https://api.runonflux.io/apps/globalappsspecifications"
 API_URL_NODES = "https://api.runonflux.io/daemon/viewdeterministicfluxnodelist"
-API_URL_APP_LOCATION_BASE = "https://api.runonflux.io/apps/location/"
 
 TIMESTAMP_REGEX = re.compile(r"\d{10,}$")
 
@@ -31,12 +26,6 @@ TIER_HW = {
     "NIMBUS":  {"cpu": 4, "ram_gb": 32, "hdd_gb": 440},
     "STRATUS": {"cpu": 8, "ram_gb": 64, "hdd_gb": 880},
 }
-
-# Cache for stats + lock
-cached_stats = None
-last_update_ts = 0
-cache_lock = threading.Lock()
-REFRESH_INTERVAL_SEC = 3600  # 1 hour
 
 
 # ---------------------------
@@ -78,54 +67,12 @@ def fetch_nodes():
     we have and to map node IP -> tier.
     """
     try:
-        resp = requests.get(API_URL_NODES, timeout=30)
+        resp = requests.get(API_URL_NODES, timeout=20)
         resp.raise_for_status()
         return resp.json().get("data", [])
-    except Exception as e:
-        print("Error fetching nodes:", e)
+    except Exception:
+        # If node API fails for some reason, just return empty list
         return []
-
-
-def enrich_apps_with_locations(apps):
-    """
-    For each app, call /apps/location/{name} and attach a 'nodes' list
-    with IPs (without ports). This lets us map instances to tiers.
-    """
-    for app_info in apps:
-        name = app_info.get("name")
-        if not name:
-            continue
-
-        try:
-            url = API_URL_APP_LOCATION_BASE + quote(str(name), safe="")
-            resp = requests.get(url, timeout=20)
-            resp.raise_for_status()
-            payload = resp.json()
-            data = payload.get("data", [])
-
-            # ensure a list exists
-            nodes_list = app_info.setdefault("nodes", [])
-
-            if isinstance(data, list):
-                for entry in data:
-                    ip = ""
-                    if isinstance(entry, dict):
-                        ip = entry.get("ip") or entry.get("ipaddress") or ""
-                    else:
-                        ip = str(entry)
-
-                    if not ip:
-                        continue
-
-                    ip_only = ip.split(":")[0]
-                    if ip_only and ip_only not in nodes_list:
-                        nodes_list.append(ip_only)
-
-        except Exception as e:
-            # Just log and continue; don't break the whole refresh
-            print(f"Error fetching locations for app {name}: {e}")
-
-    return apps
 
 
 # ---------------------------
@@ -306,7 +253,7 @@ def analyze_apps(apps, nodes):
                 custom_with_contacts += 1
 
         # -----------------------------
-        # PER-TIER USAGE (by node IP gathered from /apps/location)
+        # PER-TIER USAGE (by node IP)
         # -----------------------------
         nodes_list = app_info.get("nodes", [])
         if isinstance(nodes_list, list) and nodes_list:
@@ -346,7 +293,7 @@ def analyze_apps(apps, nodes):
     # -----------------------------
     total_ram_gb = total_ram_mb / 1024 if total_ram_mb else 0
 
-    # network totals in TB only
+    # network totals in TB only (as requested)
     network_total_ram_tb = (network_total_ram_gb / 1000) if network_total_ram_gb else 0
     network_total_hdd_tb = (network_total_hdd_gb / 1000) if network_total_hdd_gb else 0
 
@@ -439,84 +386,15 @@ def analyze_apps(apps, nodes):
 
 
 # ---------------------------
-# CACHING & SCHEDULER
-# ---------------------------
-def refresh_stats(force=False):
-    """
-    Refresh full stats:
-      - apps
-      - nodes
-      - app locations
-      - analytics
-    Cached globally. 'force' bypasses time check.
-    """
-    global cached_stats, last_update_ts
-
-    now = time.time()
-    if not force and last_update_ts and (now - last_update_ts) < REFRESH_INTERVAL_SEC:
-        return cached_stats
-
-    print("Refreshing stats from Flux APIs...")
-    try:
-        apps = fetch_apps()
-        nodes = fetch_nodes()
-        apps = enrich_apps_with_locations(apps)
-        stats = analyze_apps(apps, nodes)
-        stats["last_update_ts"] = int(now)
-
-        with cache_lock:
-            cached_stats = stats
-            last_update_ts = now
-
-        print("Stats refresh completed.")
-        return stats
-    except Exception as e:
-        print("Error during stats refresh:", e)
-        # On error, don't wipe old cache
-        with cache_lock:
-            return cached_stats
-
-
-def scheduler_loop():
-    while True:
-        refresh_stats(force=True)
-        time.sleep(REFRESH_INTERVAL_SEC)
-
-
-def start_scheduler():
-    t = threading.Thread(target=scheduler_loop, daemon=True)
-    t.start()
-
-
-# ---------------------------
 # ROUTES
 # ---------------------------
 @app.route("/stats")
 def stats():
     if not session.get("logged_in"):
         return redirect(url_for("login"))
-
-    with cache_lock:
-        stats_data = cached_stats
-
-    if stats_data is None:
-        # First-time request → do a blocking refresh
-        stats_data = refresh_stats(force=True)
-
-    return jsonify(stats_data or {})
-
-
-@app.route("/refresh-now", methods=["POST"])
-def refresh_now():
-    if not session.get("logged_in"):
-        return jsonify({"status": "error", "message": "Not logged in"}), 401
-
-    stats_data = refresh_stats(force=True)
-    return jsonify({
-        "status": "ok",
-        "message": "Stats refreshed",
-        "last_update_ts": stats_data.get("last_update_ts") if stats_data else None
-    })
+    apps = fetch_apps()
+    nodes = fetch_nodes()
+    return jsonify(analyze_apps(apps, nodes))
 
 
 @app.route("/")
@@ -527,5 +405,4 @@ def home():
 
 
 if __name__ == "__main__":
-    start_scheduler()
     app.run(host="0.0.0.0", port=8080)
