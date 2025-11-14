@@ -5,7 +5,7 @@ from collections import Counter
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
 
-# Secret key for login session
+# Secret key for session
 app.secret_key = "fluxcloud_dashboard_secret"
 
 # Hardcoded login
@@ -20,7 +20,7 @@ TARGET_OWNER = "196GJWyLxzAw3MirTT7Bqs2iGpUQio29GH"
 
 
 # ---------------------------
-# AUTHENTICATION
+# AUTH
 # ---------------------------
 @app.route("/login", methods=["GET", "POST"])
 def login():
@@ -44,7 +44,7 @@ def logout():
 
 
 # ---------------------------
-# FETCH APPS
+# FETCH
 # ---------------------------
 def fetch_apps():
     resp = requests.get(API_URL, timeout=20)
@@ -53,11 +53,10 @@ def fetch_apps():
 
 
 # ---------------------------
-# ANALYTICS ENGINE
+# ANALYTICS
 # ---------------------------
 def analyze_apps(apps):
 
-    # ensure only objects
     apps = [a for a in apps if isinstance(a, dict)]
 
     total = len(apps)
@@ -68,58 +67,42 @@ def analyze_apps(apps):
     company_deployments = 0
     company_instances = 0
 
-    # CONTACTS
+    # CONTACT / SECRET / STATICIP METRICS
     total_with_contacts = 0
     marketplace_with_contacts = 0
     custom_with_contacts = 0
 
-    # SECRETS / STATICIP
     total_with_secrets = 0
     total_with_staticip = 0
     marketplace_with_secrets = 0
     marketplace_with_staticip = 0
 
-    # NEW METRICS
+    # NEW METRIC: unique owners
     unique_owners = set()
 
-    total_cpu = 0.0
-    total_ram_mb = 0.0
-    total_hdd_gb = 0.0
+    # NEW: resource usage (multiplied by instances)
+    total_cpu = 0.0        # vCPU
+    total_ram_mb = 0       # MB
+    total_hdd_gb = 0       # GB
 
     for app_info in apps:
 
         name = app_info.get("name", "")
         owner = app_info.get("owner", "")
         instances = int(app_info.get("instances", 0))
-        contacts = app_info.get("contacts", [])
-        staticip = app_info.get("staticip", False)
-
-        # collect owner
-        if owner:
-            unique_owners.add(owner)
-
-        # RESOURCES
         cpu = float(app_info.get("cpu", 0))
         ram = float(app_info.get("ram", 0))      # MB
         hdd = float(app_info.get("hdd", 0))      # GB
 
-        total_cpu += cpu
-        total_ram_mb += ram
-        total_hdd_gb += hdd
+        # track owners
+        if owner:
+            unique_owners.add(owner)
 
-        # secrets (root or compose)
-        secrets = app_info.get("secrets", "")
+        # multiply resources by number of deployed instances
+        total_cpu += cpu * instances
+        total_ram_mb += ram * instances
+        total_hdd_gb += hdd * instances
 
-        if not secrets:
-            compose = app_info.get("compose", [])
-            if isinstance(compose, list) and len(compose) > 0:
-                first_block = compose[0]
-                if isinstance(first_block, dict):
-                    secrets = first_block.get("secrets", "")
-
-        has_secrets = isinstance(secrets, str) and secrets.strip() != ""
-
-        # instances
         total_instances += instances
 
         # company stats
@@ -127,29 +110,41 @@ def analyze_apps(apps):
             company_deployments += 1
             company_instances += instances
 
-        # contacts
+        # contact logic
+        contacts = app_info.get("contacts", [])
         has_contacts = isinstance(contacts, list) and len(contacts) > 0
         if has_contacts:
             total_with_contacts += 1
 
-        # flags
+        # SECRET extraction
+        secrets = app_info.get("secrets", "")
+        if not secrets:
+            compose = app_info.get("compose", [])
+            if isinstance(compose, list) and len(compose) > 0 and isinstance(compose[0], dict):
+                secrets = compose[0].get("secrets", "")
+
+        has_secrets = isinstance(secrets, str) and secrets.strip() != ""
+
+        # STATIC IP
+        staticip = bool(app_info.get("staticip", False))
+
         if has_secrets:
             total_with_secrets += 1
-
-        if bool(staticip) is True:
+        if staticip:
             total_with_staticip += 1
 
-        # marketplace
+        # categorize marketplace vs custom
         is_marketplace = bool(TIMESTAMP_REGEX.search(name))
 
         if is_marketplace:
+
             marketplace.append(name)
 
             if has_contacts:
                 marketplace_with_contacts += 1
             if has_secrets:
                 marketplace_with_secrets += 1
-            if bool(staticip) is True:
+            if staticip:
                 marketplace_with_staticip += 1
 
         else:
@@ -158,23 +153,23 @@ def analyze_apps(apps):
             if has_contacts:
                 custom_with_contacts += 1
 
-    # grouping marketplace templates
+    # group marketplace templates (top 5)
     base_names = [TIMESTAMP_REGEX.sub("", name) for name in marketplace]
     counts = Counter(base_names)
     top5 = counts.most_common(5)
 
-    # percentages
+    # Percentages
     marketplace_pct = round((len(marketplace) / total) * 100, 2) if total else 0
     custom_pct = round((len(custom) / total) * 100, 2) if total else 0
 
     total_contact_pct = round((total_with_contacts / total) * 100, 2) if total else 0
-    marketplace_contact_pct = round((marketplace_with_contacts / len(marketplace)) * 100, 2) if marketplace else 0
-    custom_contact_pct = round((custom_with_contacts / len(custom)) * 100, 2) if custom else 0
+    marketplace_contact_pct = round((marketplace_with_contacts / len(marketplace)) * 100, 2) if len(marketplace) else 0
+    custom_contact_pct = round((custom_with_contacts / len(custom)) * 100, 2) if len(custom) else 0
 
-    # resource conversions
-    ram_gb = total_ram_mb / 1024
-    ram_tb = ram_gb / 1024
-    hdd_tb = total_hdd_gb / 1024
+    # Convert resources
+    total_ram_gb = total_ram_mb / 1024
+    total_ram_tb = total_ram_gb / 1024
+    total_hdd_tb = total_hdd_gb / 1024
 
     return {
         # totals
@@ -182,11 +177,14 @@ def analyze_apps(apps):
         "marketplace_apps": len(marketplace),
         "custom_apps": len(custom),
 
+        # owners
+        "unique_owners": len(unique_owners),
+
         # percentages
         "marketplace_pct": marketplace_pct,
         "custom_pct": custom_pct,
 
-        # instances + company
+        # instances + company stats
         "total_instances": total_instances,
         "company_deployments": company_deployments,
         "company_instances": company_instances,
@@ -199,25 +197,22 @@ def analyze_apps(apps):
         "custom_with_contacts": custom_with_contacts,
         "custom_contact_pct": custom_contact_pct,
 
-        # flags
+        # secret / static ip
         "total_with_secrets": total_with_secrets,
         "total_with_staticip": total_with_staticip,
         "marketplace_with_secrets": marketplace_with_secrets,
         "marketplace_with_staticip": marketplace_with_staticip,
 
-        # NEW METRICS
-        "total_unique_owners": len(unique_owners),
-
-        # RESOURCES
+        # NEW resources
         "total_cpu": round(total_cpu, 2),
-        "total_ram_gb": round(ram_gb, 2),
-        "total_ram_tb": round(ram_tb, 4),
-        "total_hdd_tb": round(hdd_tb, 4),
+        "total_ram_gb": round(total_ram_gb, 2),
+        "total_ram_tb": round(total_ram_tb, 4),
+        "total_hdd_gb": round(total_hdd_gb, 2),
+        "total_hdd_tb": round(total_hdd_tb, 4),
 
         # top marketplace
         "top_marketplace_apps": [
-            {"name": n, "deployments": c}
-            for n, c in top5
+            {"name": n, "deployments": c} for n, c in top5
         ],
     }
 
@@ -229,21 +224,15 @@ def analyze_apps(apps):
 def stats():
     if not session.get("logged_in"):
         return redirect(url_for("login"))
-
-    apps = fetch_apps()
-    return jsonify(analyze_apps(apps))
+    return jsonify(analyze_apps(fetch_apps()))
 
 
 @app.route("/")
 def home():
     if not session.get("logged_in"):
         return redirect(url_for("login"))
-
     return render_template("index.html")
 
 
-# ---------------------------
-# RUN SERVER
-# ---------------------------
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8080)
