@@ -1,2 +1,5 @@
-# Runs every 4 hours
+# Correct PATH so cron can find python
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+# Run every 4 hours
 0 */4 * * * root python /app/update_cache.py >> /var/log/cron.log 2>&1
