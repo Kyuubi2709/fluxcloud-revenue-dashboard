@@ -1,59 +1,56 @@
 import os
 import json
 import time
-import traceback
-from datetime import datetime
-
 import requests
-from app import fetch_apps, fetch_nodes, analyze_apps   # reuse your existing logic
+from analyze_fluxcloud import analyze_apps, API_URL as APPS_API_URL
 
-CACHE_DIR = "cache"
+NODES_API_URL = "https://api.runonflux.io/daemon/viewdeterministicfluxnodelist"
+
+CACHE_DIR = "/app/cache"
 CACHE_FILE = os.path.join(CACHE_DIR, "stats.json")
-TEMP_FILE = os.path.join(CACHE_DIR, "stats.tmp")
+
+os.makedirs(CACHE_DIR, exist_ok=True)
 
 
-def log(msg):
-    """Small logger with timestamps."""
-    print(f"[{datetime.utcnow().isoformat()}] {msg}", flush=True)
+def fetch_apps():
+    resp = requests.get(APPS_API_URL, timeout=25)
+    resp.raise_for_status()
+    data = resp.json()
+    return data.get("data", [])
 
 
-def update_cache():
-    """Fetch apps + nodes, analyze them, then write a fresh JSON cache."""
+def fetch_nodes():
     try:
-        log("Updating cache...")
+        resp = requests.get(NODES_API_URL, timeout=25)
+        resp.raise_for_status()
+        return resp.json().get("data", [])
+    except Exception:
+        return []
 
-        # Ensure cache directory exists
-        os.makedirs(CACHE_DIR, exist_ok=True)
 
-        # Fetch data
+def main():
+    print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Updating cache...")
+
+    try:
         apps = fetch_apps()
         nodes = fetch_nodes()
 
-        # Analyze
-        data = analyze_apps(apps, nodes)
+        # Run main analytics
+        from app import analyze_apps as full_analyzer
+        stats = full_analyzer(apps, nodes)
 
-        # Write atomically: write → flush → replace
-        with open(TEMP_FILE, "w") as f:
-            json.dump(data, f, indent=2)
+        # Add timestamp
+        stats["last_updated"] = int(time.time() * 1000)
 
-        os.replace(TEMP_FILE, CACHE_FILE)
+        # Write file
+        with open(CACHE_FILE, "w") as f:
+            json.dump(stats, f, indent=2)
 
-        log("Cache update completed successfully.")
-        return True
+        print(f"[OK] Cache updated → {CACHE_FILE}")
 
     except Exception as e:
-        log(f"[ERROR] Failed to update cache: {e}")
-        traceback.print_exc()
-
-        # Cleanup temp file if it exists
-        if os.path.exists(TEMP_FILE):
-            try:
-                os.remove(TEMP_FILE)
-            except:
-                pass
-
-        return False
+        print(f"[ERROR] Failed to update cache: {e}")
 
 
 if __name__ == "__main__":
-    update_cache()
+    main()
