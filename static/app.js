@@ -150,3 +150,26 @@ async function loadStats() {
 }
 
 loadStats();
+
+
+// --------------------------------------------------------
+// MANUAL REFRESH BUTTON
+// --------------------------------------------------------
+document.getElementById("refresh-btn").addEventListener("click", async () => {
+    const statusEl = document.getElementById("refresh-status");
+    statusEl.textContent = "Refreshing...";
+
+    const resp = await fetch("/refresh", { method: "POST" });
+    const data = await resp.json();
+
+    if (data.status === "ok") {
+        statusEl.textContent = "Refresh started — updating in a few seconds...";
+        setTimeout(loadStats, 5000);
+    } 
+    else if (data.status === "cooldown") {
+        statusEl.textContent = data.message;
+    }
+    else {
+        statusEl.textContent = "Failed to refresh.";
+    }
+});
