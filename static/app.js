@@ -20,7 +20,11 @@ function formatTB(val) {
 
 async function loadStats() {
     try {
-        const resp = await fetch("/stats");
+        // IMPORTANT: include session cookies
+        const resp = await fetch("/stats", {
+            credentials: "include"
+        });
+
         const data = await resp.json();
 
         document.getElementById("loading").classList.add("hidden");
@@ -165,13 +169,17 @@ document.getElementById("refresh-btn").addEventListener("click", async () => {
     const statusEl = document.getElementById("refresh-status");
     statusEl.textContent = "Refreshing...";
 
-    const resp = await fetch("/refresh", { method: "POST" });
+    const resp = await fetch("/refresh", {
+        method: "POST",
+        credentials: "include"   // IMPORTANT
+    });
+
     const data = await resp.json();
 
     if (data.status === "ok") {
         statusEl.textContent = "Refresh started — updating shortly...";
         setTimeout(loadStats, 5000);
-    } 
+    }
     else if (data.status === "cooldown") {
         statusEl.textContent = data.message;
     }
