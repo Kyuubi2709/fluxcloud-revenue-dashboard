@@ -77,10 +77,10 @@ def analyze_apps(apps):
     marketplace_with_secrets = 0
     marketplace_with_staticip = 0
 
-    # New: count unique owners
+    # unique owners
     unique_owners = set()
 
-    # New: total resource usage
+    # total resource usage
     total_cpu = 0.0       # vCPU
     total_ram_mb = 0.0    # MB
     total_hdd_gb = 0.0    # GB
@@ -96,32 +96,32 @@ def analyze_apps(apps):
             unique_owners.add(owner)
 
         # -----------------------------
-        # RESOURCE EXTRACTION
+        # RESOURCE EXTRACTION (multi-container aware)
         # -----------------------------
-        # 1. Try top-level
-        cpu = app_info.get("cpu")
-        ram = app_info.get("ram")
-        hdd = app_info.get("hdd")
+        compose = app_info.get("compose", [])
+        cpu_app = 0.0
+        ram_app = 0.0
+        hdd_app = 0.0
+        used_compose = False
 
-        # 2. If missing → use compose[0]
-        if cpu in [None, 0] or ram in [None, 0] or hdd in [None, 0]:
+        if isinstance(compose, list) and len(compose) > 0:
+            for comp in compose:
+                if isinstance(comp, dict):
+                    used_compose = True
+                    cpu_app += float(comp.get("cpu", 0) or 0)
+                    ram_app += float(comp.get("ram", 0) or 0)   # MB
+                    hdd_app += float(comp.get("hdd", 0) or 0)   # GB
 
-            compose = app_info.get("compose", [])
-            if isinstance(compose, list) and len(compose) > 0 and isinstance(compose[0], dict):
-
-                cpu = cpu if cpu not in [None, 0] else compose[0].get("cpu", 0)
-                ram = ram if ram not in [None, 0] else compose[0].get("ram", 0)
-                hdd = hdd if hdd not in [None, 0] else compose[0].get("hdd", 0)
-
-        # convert safely
-        cpu = float(cpu or 0)
-        ram = float(ram or 0)
-        hdd = float(hdd or 0)
+        if not used_compose:
+            # fall back to top-level cpu/ram/hdd
+            cpu_app = float(app_info.get("cpu", 0) or 0)
+            ram_app = float(app_info.get("ram", 0) or 0)
+            hdd_app = float(app_info.get("hdd", 0) or 0)
 
         # multiply by instances
-        total_cpu += cpu * instances
-        total_ram_mb += ram * instances
-        total_hdd_gb += hdd * instances
+        total_cpu += cpu_app * instances
+        total_ram_mb += ram_app * instances
+        total_hdd_gb += hdd_app * instances
 
         total_instances += instances
 
@@ -146,14 +146,12 @@ def analyze_apps(apps):
         # -----------------------------
         secrets = app_info.get("secrets", "")
 
-        if not secrets:
-            compose = app_info.get("compose", [])
-            if isinstance(compose, list) and len(compose) > 0 and isinstance(compose[0], dict):
-                secrets = compose[0].get("secrets", "")
+        if not secrets and isinstance(compose, list) and len(compose) > 0 and isinstance(compose[0], dict):
+            secrets = compose[0].get("secrets", "")
 
         has_secrets = isinstance(secrets, str) and secrets.strip() != ""
 
-        # STATIC IP
+        # STATIC IP (app-level only)
         staticip = bool(app_info.get("staticip", False))
 
         if has_secrets:
@@ -203,9 +201,12 @@ def analyze_apps(apps):
     # -----------------------------
     # Resource conversions
     # -----------------------------
-    total_ram_gb = total_ram_mb / 1024
-    total_ram_tb = total_ram_gb / 1024
-    total_hdd_tb = total_hdd_gb / 1024
+    # MB -> GB (binary-ish)
+    total_ram_gb = total_ram_mb / 1024 if total_ram_mb else 0
+    # HDD already in GB
+    # TB we don't really need in backend for display, but keep for completeness (decimal-based)
+    total_ram_tb = total_ram_gb / 1000 if total_ram_gb else 0
+    total_hdd_tb = total_hdd_gb / 1000 if total_hdd_gb else 0
 
     return {
         "total_apps": total,
@@ -238,11 +239,13 @@ def analyze_apps(apps):
         "marketplace_with_secrets": marketplace_with_secrets,
         "marketplace_with_staticip": marketplace_with_staticip,
 
-        # Resource usage
+        # Resource usage (primary: GB)
         "total_cpu": round(total_cpu, 2),
         "total_ram_gb": round(total_ram_gb, 2),
-        "total_ram_tb": round(total_ram_tb, 4),
         "total_hdd_gb": round(total_hdd_gb, 2),
+
+        # Secondary TB values (not used in UI, but kept)
+        "total_ram_tb": round(total_ram_tb, 4),
         "total_hdd_tb": round(total_hdd_tb, 4),
 
         # Top marketplace
