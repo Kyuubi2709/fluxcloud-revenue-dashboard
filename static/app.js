@@ -26,6 +26,12 @@ async function loadStats() {
         document.getElementById("loading").classList.add("hidden");
         document.getElementById("content").classList.remove("hidden");
 
+        // LAST UPDATED TIMESTAMP
+        if (data.last_updated) {
+            document.getElementById("last-updated").textContent =
+                "Last updated: " + new Date(data.last_updated).toLocaleString();
+        }
+
         // BASIC COUNTS
         document.getElementById("total-apps").textContent = data.total_apps;
         document.getElementById("marketplace-apps").textContent = data.marketplace_apps;
@@ -163,7 +169,7 @@ document.getElementById("refresh-btn").addEventListener("click", async () => {
     const data = await resp.json();
 
     if (data.status === "ok") {
-        statusEl.textContent = "Refresh started — updating in a few seconds...";
+        statusEl.textContent = "Refresh started — updating shortly...";
         setTimeout(loadStats, 5000);
     } 
     else if (data.status === "cooldown") {
