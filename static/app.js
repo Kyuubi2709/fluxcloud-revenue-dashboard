@@ -10,6 +10,7 @@ async function loadStats() {
         document.getElementById("total-apps").textContent = data.total_apps;
         document.getElementById("marketplace-apps").textContent = data.marketplace_apps;
         document.getElementById("custom-apps").textContent = data.custom_apps;
+        document.getElementById("unique-owners").textContent = data.unique_owners;
 
         // PERCENTAGES
         document.getElementById("marketplace-pct").textContent = data.marketplace_pct + "%";
@@ -19,9 +20,6 @@ async function loadStats() {
         document.getElementById("total-instances").textContent = data.total_instances;
         document.getElementById("company-deployments").textContent = data.company_deployments;
         document.getElementById("company-instances").textContent = data.company_instances;
-
-        // UNIQUE OWNERS
-        document.getElementById("total-unique-owners").textContent = data.total_unique_owners;
 
         // CONTACT METRICS
         document.getElementById("marketplace-with-contacts").textContent = data.marketplace_with_contacts;
@@ -33,16 +31,17 @@ async function loadStats() {
         document.getElementById("custom-with-contacts").textContent = data.custom_with_contacts;
         document.getElementById("custom-contact-pct").textContent = data.custom_contact_pct + "%";
 
-        // FLAGS
+        // SECRETS & STATIC IP
         document.getElementById("total-with-secrets").textContent = data.total_with_secrets;
         document.getElementById("total-with-staticip").textContent = data.total_with_staticip;
+
         document.getElementById("marketplace-with-secrets").textContent = data.marketplace_with_secrets;
         document.getElementById("marketplace-with-staticip").textContent = data.marketplace_with_staticip;
 
         // RESOURCES
-        document.getElementById("total-cpu").textContent = data.total_cpu + " vCPU";
+        document.getElementById("total-cpu").textContent = `${data.total_cpu} vCPU`;
         document.getElementById("total-ram").textContent = `${data.total_ram_gb} GB (${data.total_ram_tb} TB)`;
-        document.getElementById("total-hdd").textContent = `${data.total_hdd_tb} TB`;
+        document.getElementById("total-hdd").textContent = `${data.total_hdd_gb} GB (${data.total_hdd_tb} TB)`;
 
         // TOP 5
         const tbody = document.querySelector("#top5-table tbody");
