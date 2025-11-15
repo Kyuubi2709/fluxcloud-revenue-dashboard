@@ -9,18 +9,24 @@ from collections import Counter
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
 
+# Secret key for session
 app.secret_key = "fluxcloud_dashboard_secret"
 
+# Hardcoded login
 LOGIN_USER = "fluxcloud"
 LOGIN_PASS = "fluxcloud123"
 
+# APIs
 API_URL_APPS = "https://api.runonflux.io/apps/globalappsspecifications"
 API_URL_NODES = "https://api.runonflux.io/daemon/viewdeterministicfluxnodelist"
 
+# Marketplace app name pattern
 TIMESTAMP_REGEX = re.compile(r"\d{10,}$")
 
+# Your company Flux address
 TARGET_OWNER = "196GJWyLxzAw3MirTT7Bqs2iGpUQio29GH"
 
+# Tier hardware (per node)
 TIER_HW = {
     "CUMULUS": {"cpu": 2, "ram_gb": 8, "hdd_gb": 220},
     "NIMBUS":  {"cpu": 4, "ram_gb": 32, "hdd_gb": 440},
@@ -55,7 +61,7 @@ def logout():
 
 
 # ---------------------------
-# FETCHERS
+# FETCHERS (not used by /stats now, but kept for future)
 # ---------------------------
 def fetch_apps():
     resp = requests.get(API_URL_APPS, timeout=20)
@@ -74,16 +80,12 @@ def fetch_nodes():
 
 # ---------------------------
 # ANALYTICS ENGINE
-# (unchanged — same as your original)
 # ---------------------------
-def analyze_apps(apps, nodes):
-    # [CONTENT UNCHANGED]
-    # your full analyze_apps function goes here unchanged
-    # I will NOT rewrite it here to save space
-    # Just paste your existing function body exactly as-is
-    # -------------------------------------------------------
+def analyze_apps(apps, nodes, locations=None):
+    # Normalize inputs
     apps = [a for a in apps if isinstance(a, dict)]
     nodes = [n for n in nodes if isinstance(n, dict)]
+    locations = [l for l in (locations or []) if isinstance(l, dict)]
 
     total = len(apps)
     marketplace = []
@@ -104,20 +106,27 @@ def analyze_apps(apps, nodes):
 
     unique_owners = set()
 
-    total_cpu = 0.0
-    total_ram_mb = 0.0
-    total_hdd_gb = 0.0
+    # Spec-based totals (as before)
+    total_cpu = 0.0           # vCPU
+    total_ram_mb = 0.0        # MB
+    total_hdd_gb = 0.0        # GB
 
+    # Node tier map and capacities
     node_tier_map = {}
     tier_capacity = {
         tier: {"nodes": 0, "cpu": 0.0, "ram_gb": 0.0, "hdd_gb": 0.0}
         for tier in TIER_HW
     }
+
+    # OLD spec-based tier usage (kept for backward compatibility)
     tier_usage = {
         tier: {"instances": 0, "cpu": 0.0, "ram_gb": 0.0, "hdd_gb": 0.0}
         for tier in TIER_HW
     }
 
+    # ---------------------------------------------------------------------
+    # Build node_tier_map & capacity
+    # ---------------------------------------------------------------------
     for node in nodes:
         ip = node.get("ip") or node.get("ipaddress") or ""
         raw_tier = node.get("tier") or ""
@@ -145,8 +154,15 @@ def analyze_apps(apps, nodes):
         network_total_ram_gb += tier_capacity[tier]["ram_gb"]
         network_total_hdd_gb += tier_capacity[tier]["hdd_gb"]
 
-    for app_info in apps:
+    # ---------------------------------------------------------------------
+    # Per-app resources map (for use with locations later)
+    # ---------------------------------------------------------------------
+    app_resource_map = {}  # name -> {"cpu": vCPU, "ram_mb": MB, "hdd_gb": GB}
 
+    # ---------------------------------------------------------------------
+    # Process each app (your original logic)
+    # ---------------------------------------------------------------------
+    for app_info in apps:
         name = app_info.get("name", "")
         owner = app_info.get("owner", "")
         instances = int(app_info.get("instances", 0))
@@ -154,6 +170,7 @@ def analyze_apps(apps, nodes):
         if owner:
             unique_owners.add(owner)
 
+        # RESOURCE EXTRACTION (multi-container aware)
         compose = app_info.get("compose", [])
         cpu_per_inst = 0.0
         ram_per_inst_mb = 0.0
@@ -173,25 +190,38 @@ def analyze_apps(apps, nodes):
             ram_per_inst_mb = float(app_info.get("ram", 0) or 0)
             hdd_per_inst_gb = float(app_info.get("hdd", 0) or 0)
 
+        # Save per-instance resources for later use with locations
+        if name:
+            app_resource_map[name] = {
+                "cpu": cpu_per_inst,
+                "ram_mb": ram_per_inst_mb,
+                "hdd_gb": hdd_per_inst_gb,
+            }
+
+        # Multiply by instances for total spec-based usage
         total_cpu += cpu_per_inst * instances
         total_ram_mb += ram_per_inst_mb * instances
         total_hdd_gb += hdd_per_inst_gb * instances
 
         total_instances += instances
 
+        # COMPANY STATS (unchanged, from spec)
         if owner == TARGET_OWNER:
             company_deployments += 1
             company_instances += instances
 
+        # CONTACTS
         contacts = app_info.get("contacts", [])
         has_contacts = isinstance(contacts, list) and len(contacts) > 0
 
         if has_contacts:
             total_with_contacts += 1
 
+        # SECRETS detection
         secrets = app_info.get("secrets", "")
 
-        if not secrets and isinstance(compose, list) and len(compose) > 0 and isinstance(compose[0], dict):
+        if (not secrets and isinstance(compose, list) and len(compose) > 0
+                and isinstance(compose[0], dict)):
             secrets = compose[0].get("secrets", "")
 
         has_secrets = isinstance(secrets, str) and secrets.strip() != ""
@@ -202,6 +232,7 @@ def analyze_apps(apps, nodes):
         if staticip:
             total_with_staticip += 1
 
+        # MARKETPLACE VS CUSTOM
         is_marketplace = bool(TIMESTAMP_REGEX.search(name))
 
         if is_marketplace:
@@ -213,12 +244,12 @@ def analyze_apps(apps, nodes):
                 marketplace_with_secrets += 1
             if staticip:
                 marketplace_with_staticip += 1
-
         else:
             custom.append(name)
             if has_contacts:
                 custom_with_contacts += 1
 
+        # OLD per-tier usage using app_info["nodes"] (kept for compat)
         nodes_list = app_info.get("nodes", [])
         if isinstance(nodes_list, list) and nodes_list:
             ram_inst_gb = ram_per_inst_mb / 1024.0 if ram_per_inst_mb else 0.0
@@ -235,26 +266,42 @@ def analyze_apps(apps, nodes):
                 tier_usage[tier]["ram_gb"] += ram_inst_gb
                 tier_usage[tier]["hdd_gb"] += hdd_per_inst_gb
 
+    # ---------------------------------------------------------------------
+    # TOP 5 MARKETPLACE APPS (unchanged)
+    # ---------------------------------------------------------------------
     base_names = [TIMESTAMP_REGEX.sub("", name) for name in marketplace]
     counts = Counter(base_names)
     top5 = counts.most_common(5)
 
+    # ---------------------------------------------------------------------
+    # Percentages (unchanged)
+    # ---------------------------------------------------------------------
     marketplace_pct = round((len(marketplace) / total) * 100, 2) if total else 0
     custom_pct = round((len(custom) / total) * 100, 2) if total else 0
 
     total_contact_pct = round((total_with_contacts / total) * 100, 2) if total else 0
-    marketplace_contact_pct = round((marketplace_with_contacts / len(marketplace)) * 100, 2) if len(marketplace) else 0
-    custom_contact_pct = round((custom_with_contacts / len(custom)) * 100, 2) if len(custom) else 0
+    marketplace_contact_pct = round(
+        (marketplace_with_contacts / len(marketplace)) * 100, 2
+    ) if len(marketplace) else 0
+    custom_contact_pct = round(
+        (custom_with_contacts / len(custom)) * 100, 2
+    ) if len(custom) else 0
 
+    # ---------------------------------------------------------------------
+    # Spec-based resource conversions (unchanged)
+    # ---------------------------------------------------------------------
     total_ram_gb = total_ram_mb / 1024 if total_ram_mb else 0
 
+    # Network totals in TB (unchanged)
     network_total_ram_tb = (network_total_ram_gb / 1000) if network_total_ram_gb else 0
     network_total_hdd_tb = (network_total_hdd_gb / 1000) if network_total_hdd_gb else 0
 
+    # Spec-based utilization (kept for reference)
     cpu_util_pct = round((total_cpu / network_total_cpu) * 100, 2) if network_total_cpu else 0
     ram_util_pct = round((total_ram_gb / network_total_ram_gb) * 100, 2) if network_total_ram_gb else 0
     hdd_util_pct = round((total_hdd_gb / network_total_hdd_gb) * 100, 2) if network_total_hdd_gb else 0
 
+    # Prepare spec-based tier usage/capacity for output (unchanged)
     tier_usage_out = {}
     for tier in TIER_HW:
         u = tier_usage[tier]
@@ -275,37 +322,146 @@ def analyze_apps(apps, nodes):
             "hdd_tb": round((c["hdd_gb"] / 1000) if c["hdd_gb"] else 0, 2),
         }
 
+    # =====================================================================
+    # NEW: REAL RESOURCE USAGE BASED ON /apps/locations
+    # =====================================================================
+    resources_total_cpu_used = 0.0
+    resources_total_ram_mb_used = 0.0
+    resources_total_hdd_gb_used = 0.0
+
+    resources_tier_usage = {
+        tier: {"instances": 0, "cpu": 0.0, "ram_gb": 0.0, "hdd_gb": 0.0}
+        for tier in TIER_HW
+    }
+    # bucket for instances whose node IP could not be mapped to a tier
+    resources_tier_usage["UNKNOWN"] = {
+        "instances": 0,
+        "cpu": 0.0,
+        "ram_gb": 0.0,
+        "hdd_gb": 0.0,
+    }
+
+    for loc in locations:
+        app_name = loc.get("name") or loc.get("app") or ""
+        if not app_name:
+            continue
+
+        # Look up per-instance resources
+        res = app_resource_map.get(app_name, None)
+
+        cpu = float(res["cpu"]) if res else 0.0
+        ram_mb = float(res["ram_mb"]) if res else 0.0
+        hdd_gb = float(res["hdd_gb"]) if res else 0.0
+
+        # Node / IP -> tier (strip port!)
+        ip_raw = loc.get("ip", "")
+        ip_only = ip_raw.split(":")[0] if isinstance(ip_raw, str) else ip_raw
+        tier = node_tier_map.get(ip_only)
+
+        bucket = tier if tier in TIER_HW else "UNKNOWN"
+
+        resources_tier_usage[bucket]["instances"] += 1
+        resources_tier_usage[bucket]["cpu"] += cpu
+        resources_tier_usage[bucket]["ram_gb"] += (ram_mb / 1024.0) if ram_mb else 0.0
+        resources_tier_usage[bucket]["hdd_gb"] += hdd_gb
+
+        resources_total_cpu_used += cpu
+        resources_total_ram_mb_used += ram_mb
+        resources_total_hdd_gb_used += hdd_gb
+
+    resources_total_ram_gb_used = (
+        resources_total_ram_mb_used / 1024.0 if resources_total_ram_mb_used else 0.0
+    )
+
+    # Utilization based on REAL usage from locations
+    resources_cpu_util_pct = (
+        round((resources_total_cpu_used / network_total_cpu) * 100, 2)
+        if network_total_cpu else 0
+    )
+    resources_ram_util_pct = (
+        round((resources_total_ram_gb_used / network_total_ram_gb) * 100, 2)
+        if network_total_ram_gb else 0
+    )
+    resources_hdd_util_pct = (
+        round((resources_total_hdd_gb_used / network_total_hdd_gb) * 100, 2)
+        if network_total_hdd_gb else 0
+    )
+
+    resources_tier_usage_out = {}
+    for tier, u in resources_tier_usage.items():
+        resources_tier_usage_out[tier] = {
+            "instances": u["instances"],
+            "cpu": round(u["cpu"], 2),
+            "ram_gb": round(u["ram_gb"], 2),
+            "hdd_gb": round(u["hdd_gb"], 2),
+        }
+
+    # ---------------------------------------------------------------------
+    # Final result
+    # ---------------------------------------------------------------------
     return {
+        # basic totals (unchanged)
         "total_apps": total,
         "marketplace_apps": len(marketplace),
         "custom_apps": len(custom),
+
+        # owners
         "unique_owners": len(unique_owners),
+
+        # percentages
         "marketplace_pct": marketplace_pct,
         "custom_pct": custom_pct,
+
+        # instances + company stats (unchanged – from specs)
         "total_instances": total_instances,
         "company_deployments": company_deployments,
         "company_instances": company_instances,
+
+        # contact stats
         "total_with_contacts": total_with_contacts,
         "total_contact_pct": total_contact_pct,
         "marketplace_with_contacts": marketplace_with_contacts,
         "marketplace_contact_pct": marketplace_contact_pct,
         "custom_with_contacts": custom_with_contacts,
         "custom_contact_pct": custom_contact_pct,
+
+        # secret / static ip
         "total_with_secrets": total_with_secrets,
         "total_with_staticip": total_with_staticip,
         "marketplace_with_secrets": marketplace_with_secrets,
         "marketplace_with_staticip": marketplace_with_staticip,
+
+        # spec-based app resource usage (kept for reference)
         "total_cpu": round(total_cpu, 2),
         "total_ram_gb": round(total_ram_gb, 2),
         "total_hdd_gb": round(total_hdd_gb, 2),
+
+        # OLD tier usage from app-level nodes (kept)
         "tier_usage": tier_usage_out,
+
+        # network capacity (unchanged)
         "network_total_cpu": network_total_cpu,
         "network_total_ram_tb": round(network_total_ram_tb, 2),
         "network_total_hdd_tb": round(network_total_hdd_tb, 2),
+
+        # tier capacity (unchanged)
         "tier_capacity": tier_capacity_out,
+
+        # spec-based utilization (kept)
         "cpu_util_pct": cpu_util_pct,
         "ram_util_pct": ram_util_pct,
         "hdd_util_pct": hdd_util_pct,
+
+        # NEW: REAL RESOURCE USAGE for Resources tab
+        "resources_total_cpu_used": round(resources_total_cpu_used, 2),
+        "resources_total_ram_gb_used": round(resources_total_ram_gb_used, 2),
+        "resources_total_hdd_gb_used": round(resources_total_hdd_gb_used, 2),
+        "resources_tier_usage": resources_tier_usage_out,
+        "resources_cpu_util_pct": resources_cpu_util_pct,
+        "resources_ram_util_pct": resources_ram_util_pct,
+        "resources_hdd_util_pct": resources_hdd_util_pct,
+
+        # top marketplace apps (unchanged)
         "top_marketplace_apps": [
             {"name": n, "deployments": c} for n, c in top5
         ],
