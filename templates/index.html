@@ -9,132 +9,161 @@
 
 <h1>FluxCloud Revenue Overview</h1>
 
-<!-- Last Updated Timestamp -->
 <p id="last-updated" style="color:#555; margin-bottom: 10px;">Last updated: –</p>
 
 <a href="/logout" class="logout-link">Logout</a>
 
-<!-- Refresh Button + Status + Spinner -->
 <button id="refresh-btn" style="margin-top:10px;">Refresh Data</button>
-<p id="refresh-status" style="margin-bottom: 8px; color:#333;"></p>
+<p id="refresh-status" style="margin-bottom: 5px; color:#333;"></p>
 <div id="spinner" class="hidden"></div>
 
 <div id="loading">Loading data...</div>
 
-<div id="content" class="hidden">
+<!-- TABS -->
+<div class="tabs">
+    <button class="tab-btn active" data-tab="general">General</button>
+    <button class="tab-btn" data-tab="resources">Resources</button>
+</div>
 
-    <!-- MAIN METRICS -->
-    <div class="stat-grid">
+<!-- ========================= -->
+<!-- GENERAL TAB CONTENT       -->
+<!-- ========================= -->
+<div id="tab-general" class="tab-content">
 
-        <div class="stat-box">
-            <h3>Total Applications</h3>
-            <p id="total-apps">–</p>
+    <div id="content" class="hidden">
+
+        <!-- MAIN METRICS -->
+        <div class="stat-grid">
+
+            <div class="stat-box">
+                <h3>Total Applications</h3>
+                <p id="total-apps">–</p>
+            </div>
+
+            <div class="stat-box">
+                <h3>Marketplace Apps</h3>
+                <p id="marketplace-apps">–</p>
+            </div>
+
+            <div class="stat-box">
+                <h3>Custom Apps</h3>
+                <p id="custom-apps">–</p>
+            </div>
+
+            <div class="stat-box">
+                <h3>Unique Owners</h3>
+                <p id="unique-owners">–</p>
+            </div>
+
         </div>
 
-        <div class="stat-box">
-            <h3>Marketplace Apps</h3>
-            <p id="marketplace-apps">–</p>
+        <!-- ADDITIONAL METRICS -->
+        <h2>Additional Metrics</h2>
+
+        <div class="stat-grid">
+
+            <div class="stat-box">
+                <h3>Marketplace %</h3>
+                <p id="marketplace-pct">–</p>
+            </div>
+
+            <div class="stat-box">
+                <h3>Custom %</h3>
+                <p id="custom-pct">–</p>
+            </div>
+
+            <div class="stat-box">
+                <h3>Total Instances</h3>
+                <p id="total-instances">–</p>
+            </div>
+
+            <div class="stat-box">
+                <h3>Company Deployments</h3>
+                <p id="company-deployments">–</p>
+            </div>
+
+            <div class="stat-box">
+                <h3>Company Instances</h3>
+                <p id="company-instances">–</p>
+            </div>
+
+            <div class="stat-box">
+                <h3>Marketplace w/ Contacts</h3>
+                <p id="marketplace-with-contacts">–</p>
+            </div>
+
+            <div class="stat-box">
+                <h3>Marketplace Contact %</h3>
+                <p id="marketplace-contact-pct">–</p>
+            </div>
+
+            <div class="stat-box">
+                <h3>Total w/ Contacts</h3>
+                <p id="total-with-contacts">–</p>
+            </div>
+
+            <div class="stat-box">
+                <h3>Total Contact %</h3>
+                <p id="total-contact-pct">–</p>
+            </div>
+
+            <div class="stat-box">
+                <h3>Custom w/ Contacts</h3>
+                <p id="custom-with-contacts">–</p>
+            </div>
+
+            <div class="stat-box">
+                <h3>Custom Contact %</h3>
+                <p id="custom-contact-pct">–</p>
+            </div>
+
+            <div class="stat-box">
+                <h3>Apps w/ Secrets</h3>
+                <p id="total-with-secrets">–</p>
+            </div>
+
+            <div class="stat-box">
+                <h3>Apps w/ Static IP</h3>
+                <p id="total-with-staticip">–</p>
+            </div>
+
+            <div class="stat-box">
+                <h3>Marketplace: Secrets</h3>
+                <p id="marketplace-with-secrets">–</p>
+            </div>
+
+            <div class="stat-box">
+                <h3>Marketplace: Static IP</h3>
+                <p id="marketplace-with-staticip">–</p>
+            </div>
+
         </div>
 
-        <div class="stat-box">
-            <h3>Custom Apps</h3>
-            <p id="custom-apps">–</p>
-        </div>
+        <!-- TOP 5 -->
+        <h2>Top 5 Marketplace Apps</h2>
 
-        <div class="stat-box">
-            <h3>Unique Owners</h3>
-            <p id="unique-owners">–</p>
-        </div>
+        <table id="top5-table">
+            <thead>
+                <tr>
+                    <th>App Name</th>
+                    <th>Deployments</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
 
     </div>
+</div>
 
-    <!-- ADDITIONAL METRICS -->
-    <h2>Additional Metrics</h2>
 
-    <div class="stat-grid">
+<!-- ========================= -->
+<!-- RESOURCES TAB CONTENT     -->
+<!-- ========================= -->
+<div id="tab-resources" class="tab-content hidden">
 
-        <div class="stat-box">
-            <h3>Marketplace %</h3>
-            <p id="marketplace-pct">–</p>
-        </div>
-
-        <div class="stat-box">
-            <h3>Custom %</h3>
-            <p id="custom-pct">–</p>
-        </div>
-
-        <div class="stat-box">
-            <h3>Total Instances</h3>
-            <p id="total-instances">–</p>
-        </div>
-
-        <div class="stat-box">
-            <h3>Company Deployments</h3>
-            <p id="company-deployments">–</p>
-        </div>
-
-        <div class="stat-box">
-            <h3>Company Instances</h3>
-            <p id="company-instances">–</p>
-        </div>
-
-        <div class="stat-box">
-            <h3>Marketplace w/ Contacts</h3>
-            <p id="marketplace-with-contacts">–</p>
-        </div>
-
-        <div class="stat-box">
-            <h3>Marketplace Contact %</h3>
-            <p id="marketplace-contact-pct">–</p>
-        </div>
-
-        <div class="stat-box">
-            <h3>Total w/ Contacts</h3>
-            <p id="total-with-contacts">–</p>
-        </div>
-
-        <div class="stat-box">
-            <h3>Total Contact %</h3>
-            <p id="total-contact-pct">–</p>
-        </div>
-
-        <div class="stat-box">
-            <h3>Custom w/ Contacts</h3>
-            <p id="custom-with-contacts">–</p>
-        </div>
-
-        <div class="stat-box">
-            <h3>Custom Contact %</h3>
-            <p id="custom-contact-pct">–</p>
-        </div>
-
-        <div class="stat-box">
-            <h3>Apps w/ Secrets</h3>
-            <p id="total-with-secrets">–</p>
-        </div>
-
-        <div class="stat-box">
-            <h3>Apps w/ Static IP</h3>
-            <p id="total-with-staticip">–</p>
-        </div>
-
-        <div class="stat-box">
-            <h3>Marketplace: Secrets</h3>
-            <p id="marketplace-with-secrets">–</p>
-        </div>
-
-        <div class="stat-box">
-            <h3>Marketplace: Static IP</h3>
-            <p id="marketplace-with-staticip">–</p>
-        </div>
-
-    </div>
-
-    <!-- RESOURCES (APP USAGE) -->
     <h2>Resources (App Usage)</h2>
 
     <div class="stat-grid">
-
         <div class="stat-box">
             <h3>Total CPU</h3>
             <p id="total-cpu">–</p>
@@ -149,10 +178,8 @@
             <h3>Total HDD</h3>
             <p id="total-hdd">–</p>
         </div>
-
     </div>
 
-    <!-- RESOURCE USAGE BY TIER -->
     <h2>Resource Usage by Tier</h2>
 
     <div class="stat-grid">
@@ -181,7 +208,6 @@
         </div>
     </div>
 
-    <!-- NETWORK CAPACITY (ALL TIERS) -->
     <h2>Network Capacity (All Tiers)</h2>
 
     <div class="stat-grid">
@@ -201,7 +227,6 @@
         </div>
     </div>
 
-    <!-- NETWORK CAPACITY BY TIER -->
     <h2>Network Capacity by Tier</h2>
 
     <div class="stat-grid">
@@ -230,7 +255,6 @@
         </div>
     </div>
 
-    <!-- NETWORK UTILIZATION -->
     <h2>Network Utilization</h2>
 
     <div class="stat-grid">
@@ -249,19 +273,6 @@
             <p id="hdd-util-pct">–</p>
         </div>
     </div>
-
-    <!-- TOP 5 -->
-    <h2>Top 5 Marketplace Apps</h2>
-
-    <table id="top5-table">
-        <thead>
-            <tr>
-                <th>App Name</th>
-                <th>Deployments</th>
-            </tr>
-        </thead>
-        <tbody></tbody>
-    </table>
 
 </div>
 
