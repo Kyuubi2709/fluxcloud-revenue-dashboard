@@ -16,31 +16,32 @@ function formatTB(val) {
 // -------------------------------------------------------------------------
 function fillResources(data) {
 
-    // TOTAL USAGE
+    // TOTAL USAGE (real usage from /apps/locations)
     document.getElementById("total-cpu").textContent =
-        data.resources_total_cpu_used + " vCPU";
+        (data.resources_total_cpu_used ?? 0).toFixed(2) + " vCPU";
 
     document.getElementById("total-ram").textContent =
-        formatStorage(data.resources_total_ram_gb_used);
+        formatStorage(data.resources_total_ram_gb_used ?? 0);
 
     document.getElementById("total-hdd").textContent =
-        formatStorage(data.resources_total_hdd_gb_used);
+        formatStorage(data.resources_total_hdd_gb_used ?? 0);
 
-    // PER-TIER USAGE
+    // PER-TIER USAGE (real usage)
     const rtu = data.resources_tier_usage || {};
 
     function loadTier(prefix, d) {
+        d = d || {};
         document.getElementById(prefix + "-instances").textContent = d.instances ?? 0;
         document.getElementById(prefix + "-cpu").textContent = (d.cpu ?? 0).toFixed(2) + " vCPU";
         document.getElementById(prefix + "-ram").textContent = formatStorage(d.ram_gb ?? 0);
         document.getElementById(prefix + "-hdd").textContent = formatStorage(d.hdd_gb ?? 0);
     }
 
-    loadTier("rtu-cumulus", rtu.CUMULUS || {});
-    loadTier("rtu-nimbus", rtu.NIMBUS || {});
-    loadTier("rtu-stratus", rtu.STRATUS || {});
+    loadTier("rtu-cumulus", rtu.CUMULUS);
+    loadTier("rtu-nimbus", rtu.NIMBUS);
+    loadTier("rtu-stratus", rtu.STRATUS);
 
-    // UTILIZATION
+    // GLOBAL UTILIZATION (real, resources-based)
     document.getElementById("cpu-util-pct").textContent =
         (data.resources_cpu_util_pct ?? 0) + "%";
 
@@ -49,6 +50,25 @@ function fillResources(data) {
 
     document.getElementById("hdd-util-pct").textContent =
         (data.resources_hdd_util_pct ?? 0) + "%";
+
+    // ---------------------------------------------------------------------
+    // NEW: PER-TIER UTILIZATION (%)
+    // ---------------------------------------------------------------------
+    const tu = data.tier_utilization || {};
+
+    function setTierUtil(idPrefix, obj) {
+        obj = obj || {};
+        document.getElementById(idPrefix + "-cpu").textContent =
+            (obj.cpu_util_pct ?? 0) + "%";
+        document.getElementById(idPrefix + "-ram").textContent =
+            (obj.ram_util_pct ?? 0) + "%";
+        document.getElementById(idPrefix + "-hdd").textContent =
+            (obj.hdd_util_pct ?? 0) + "%";
+    }
+
+    setTierUtil("tier-util-cumulus", tu.CUMULUS);
+    setTierUtil("tier-util-nimbus", tu.NIMBUS);
+    setTierUtil("tier-util-stratus", tu.STRATUS);
 }
 
 // --- load stats -----------------------------------------------------------
@@ -96,13 +116,16 @@ async function loadStats() {
         document.getElementById("marketplace-with-secrets").textContent = data.marketplace_with_secrets;
         document.getElementById("marketplace-with-staticip").textContent = data.marketplace_with_staticip;
 
-        // NEW: resources section
+        // RESOURCES (new real usage + per-tier + per-tier utilization)
         fillResources(data);
 
         // NETWORK CAPACITY
-        document.getElementById("network-total-cpu").textContent = data.network_total_cpu + " vCPU";
-        document.getElementById("network-total-ram").textContent = formatTB(data.network_total_ram_tb);
-        document.getElementById("network-total-hdd").textContent = formatTB(data.network_total_hdd_tb);
+        document.getElementById("network-total-cpu").textContent =
+            (data.network_total_cpu ?? 0) + " vCPU";
+        document.getElementById("network-total-ram").textContent =
+            formatTB(data.network_total_ram_tb);
+        document.getElementById("network-total-hdd").textContent =
+            formatTB(data.network_total_hdd_tb);
 
         const tierCap = data.tier_capacity || {};
         ["CUMULUS", "NIMBUS", "STRATUS"].forEach(t => {
