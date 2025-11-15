@@ -11,6 +11,46 @@ function formatTB(val) {
     return Number(val).toFixed(2) + " TB";
 }
 
+// -------------------------------------------------------------------------
+// NEW RESOURCES FILLER
+// -------------------------------------------------------------------------
+function fillResources(data) {
+
+    // TOTAL USAGE
+    document.getElementById("total-cpu").textContent =
+        data.resources_total_cpu_used + " vCPU";
+
+    document.getElementById("total-ram").textContent =
+        formatStorage(data.resources_total_ram_gb_used);
+
+    document.getElementById("total-hdd").textContent =
+        formatStorage(data.resources_total_hdd_gb_used);
+
+    // PER-TIER USAGE
+    const rtu = data.resources_tier_usage || {};
+
+    function loadTier(prefix, d) {
+        document.getElementById(prefix + "-instances").textContent = d.instances ?? 0;
+        document.getElementById(prefix + "-cpu").textContent = (d.cpu ?? 0).toFixed(2) + " vCPU";
+        document.getElementById(prefix + "-ram").textContent = formatStorage(d.ram_gb ?? 0);
+        document.getElementById(prefix + "-hdd").textContent = formatStorage(d.hdd_gb ?? 0);
+    }
+
+    loadTier("rtu-cumulus", rtu.CUMULUS || {});
+    loadTier("rtu-nimbus", rtu.NIMBUS || {});
+    loadTier("rtu-stratus", rtu.STRATUS || {});
+
+    // UTILIZATION
+    document.getElementById("cpu-util-pct").textContent =
+        (data.resources_cpu_util_pct ?? 0) + "%";
+
+    document.getElementById("ram-util-pct").textContent =
+        (data.resources_ram_util_pct ?? 0) + "%";
+
+    document.getElementById("hdd-util-pct").textContent =
+        (data.resources_hdd_util_pct ?? 0) + "%";
+}
+
 // --- load stats -----------------------------------------------------------
 
 async function loadStats() {
@@ -20,7 +60,6 @@ async function loadStats() {
 
         document.getElementById("loading").classList.add("hidden");
 
-        // timestamp
         if (data.last_updated) {
             document.getElementById("last-updated").textContent =
                 "Last updated: " + new Date(data.last_updated).toLocaleString();
@@ -57,21 +96,8 @@ async function loadStats() {
         document.getElementById("marketplace-with-secrets").textContent = data.marketplace_with_secrets;
         document.getElementById("marketplace-with-staticip").textContent = data.marketplace_with_staticip;
 
-        // RESOURCES
-        document.getElementById("total-cpu").textContent = data.total_cpu + " vCPU";
-        document.getElementById("total-ram").textContent = formatStorage(data.total_ram_gb);
-        document.getElementById("total-hdd").textContent = formatStorage(data.total_hdd_gb);
-
-        // TIER USAGE
-        const tierUsage = data.tier_usage || {};
-        ["CUMULUS", "NIMBUS", "STRATUS"].forEach(t => {
-            const l = t.toLowerCase();
-            const u = tierUsage[t] || {};
-            document.getElementById(`tier-${l}-instances`).textContent = u.instances ?? 0;
-            document.getElementById(`tier-${l}-cpu`).textContent = (u.cpu ?? 0) + " vCPU";
-            document.getElementById(`tier-${l}-ram`).textContent = formatStorage(u.ram_gb);
-            document.getElementById(`tier-${l}-hdd`).textContent = formatStorage(u.hdd_gb);
-        });
+        // NEW: resources section
+        fillResources(data);
 
         // NETWORK CAPACITY
         document.getElementById("network-total-cpu").textContent = data.network_total_cpu + " vCPU";
@@ -87,11 +113,6 @@ async function loadStats() {
             document.getElementById(`network-${l}-ram`).textContent = formatTB(c.ram_tb);
             document.getElementById(`network-${l}-hdd`).textContent = formatTB(c.hdd_tb);
         });
-
-        // UTILIZATION
-        document.getElementById("cpu-util-pct").textContent = data.cpu_util_pct + "%";
-        document.getElementById("ram-util-pct").textContent = data.ram_util_pct + "%";
-        document.getElementById("hdd-util-pct").textContent = data.hdd_util_pct + "%";
 
         // TOP 5
         const tbody = document.querySelector("#top5-table tbody");
@@ -154,16 +175,12 @@ document.getElementById("refresh-btn").addEventListener("click", async () => {
 
 document.querySelectorAll(".tab-btn").forEach(btn => {
     btn.addEventListener("click", () => {
-        // Switch active button
         document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
         btn.classList.add("active");
 
         const tab = btn.dataset.tab;
 
-        // Hide all tabs
         document.querySelectorAll(".tab-content").forEach(c => c.classList.add("hidden"));
-
-        // Show selected tab
         document.getElementById("tab-" + tab).classList.remove("hidden");
     });
 });
