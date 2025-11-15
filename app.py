@@ -373,7 +373,7 @@ def analyze_apps(apps, nodes, locations=None):
         resources_total_ram_mb_used / 1024.0 if resources_total_ram_mb_used else 0.0
     )
 
-    # Utilization based on REAL usage from locations
+    # Utilization based on REAL usage from locations (global)
     resources_cpu_util_pct = (
         round((resources_total_cpu_used / network_total_cpu) * 100, 2)
         if network_total_cpu else 0
@@ -394,6 +394,30 @@ def analyze_apps(apps, nodes, locations=None):
             "cpu": round(u["cpu"], 2),
             "ram_gb": round(u["ram_gb"], 2),
             "hdd_gb": round(u["hdd_gb"], 2),
+        }
+
+    # =====================================================================
+    # NEW: PER-TIER UTILIZATION (RESOURCES-BASED)
+    # =====================================================================
+    tier_utilization = {}
+    for tier in TIER_HW:
+        cap = tier_capacity[tier]
+        usage = resources_tier_usage.get(tier, {"cpu": 0.0, "ram_gb": 0.0, "hdd_gb": 0.0})
+
+        cpu_util_tier = (
+            round((usage["cpu"] / cap["cpu"]) * 100, 2) if cap["cpu"] else 0
+        )
+        ram_util_tier = (
+            round((usage["ram_gb"] / cap["ram_gb"]) * 100, 2) if cap["ram_gb"] else 0
+        )
+        hdd_util_tier = (
+            round((usage["hdd_gb"] / cap["hdd_gb"]) * 100, 2) if cap["hdd_gb"] else 0
+        )
+
+        tier_utilization[tier] = {
+            "cpu_util_pct": cpu_util_tier,
+            "ram_util_pct": ram_util_tier,
+            "hdd_util_pct": hdd_util_tier,
         }
 
     # ---------------------------------------------------------------------
@@ -452,7 +476,7 @@ def analyze_apps(apps, nodes, locations=None):
         "ram_util_pct": ram_util_pct,
         "hdd_util_pct": hdd_util_pct,
 
-        # NEW: REAL RESOURCE USAGE for Resources tab
+        # NEW: REAL RESOURCE USAGE for Resources tab (global)
         "resources_total_cpu_used": round(resources_total_cpu_used, 2),
         "resources_total_ram_gb_used": round(resources_total_ram_gb_used, 2),
         "resources_total_hdd_gb_used": round(resources_total_hdd_gb_used, 2),
@@ -460,6 +484,9 @@ def analyze_apps(apps, nodes, locations=None):
         "resources_cpu_util_pct": resources_cpu_util_pct,
         "resources_ram_util_pct": resources_ram_util_pct,
         "resources_hdd_util_pct": resources_hdd_util_pct,
+
+        # NEW: PER-TIER UTILIZATION (resources-based)
+        "tier_utilization": tier_utilization,
 
         # top marketplace apps (unchanged)
         "top_marketplace_apps": [
