@@ -1,39 +1,32 @@
-function formatStorage(gb) {
-    if (gb === null || gb === undefined || isNaN(gb)) {
-        return "–";
-    }
+// --- formatting helpers --------------------------------------------------
 
-    const value = Number(gb);
-    if (value >= 1000) {
-        const tb = value / 1000;
-        return tb.toFixed(2) + " TB";
-    }
-    return value.toFixed(2) + " GB";
+function formatStorage(gb) {
+    if (gb === null || gb === undefined || isNaN(gb)) return "–";
+    const v = Number(gb);
+    return v >= 1000 ? (v / 1000).toFixed(2) + " TB" : v.toFixed(2) + " GB";
 }
 
 function formatTB(val) {
-    if (val === null || val === undefined || isNaN(val)) {
-        return "0.00 TB";
-    }
+    if (val === null || val === undefined || isNaN(val)) return "0.00 TB";
     return Number(val).toFixed(2) + " TB";
 }
 
+// --- load stats -----------------------------------------------------------
+
 async function loadStats() {
     try {
-        const resp = await fetch("/stats", {
-            credentials: "include"
-        });
-
+        const resp = await fetch("/stats", { credentials: "include" });
         const data = await resp.json();
 
         document.getElementById("loading").classList.add("hidden");
-        document.getElementById("content").classList.remove("hidden");
 
-        // LAST UPDATED TIMESTAMP
+        // timestamp
         if (data.last_updated) {
             document.getElementById("last-updated").textContent =
                 "Last updated: " + new Date(data.last_updated).toLocaleString();
         }
+
+        document.getElementById("content").classList.remove("hidden");
 
         // BASIC COUNTS
         document.getElementById("total-apps").textContent = data.total_apps;
@@ -45,107 +38,64 @@ async function loadStats() {
         document.getElementById("marketplace-pct").textContent = data.marketplace_pct + "%";
         document.getElementById("custom-pct").textContent = data.custom_pct + "%";
 
-        // INSTANCES + COMPANY
+        // INSTANCES
         document.getElementById("total-instances").textContent = data.total_instances;
         document.getElementById("company-deployments").textContent = data.company_deployments;
         document.getElementById("company-instances").textContent = data.company_instances;
 
-        // CONTACT METRICS
+        // CONTACTS
         document.getElementById("marketplace-with-contacts").textContent = data.marketplace_with_contacts;
         document.getElementById("marketplace-contact-pct").textContent = data.marketplace_contact_pct + "%";
-
         document.getElementById("total-with-contacts").textContent = data.total_with_contacts;
         document.getElementById("total-contact-pct").textContent = data.total_contact_pct + "%";
-
         document.getElementById("custom-with-contacts").textContent = data.custom_with_contacts;
         document.getElementById("custom-contact-pct").textContent = data.custom_contact_pct + "%";
 
-        // SECRETS & STATIC IP
+        // secrets & static ip
         document.getElementById("total-with-secrets").textContent = data.total_with_secrets;
         document.getElementById("total-with-staticip").textContent = data.total_with_staticip;
-
         document.getElementById("marketplace-with-secrets").textContent = data.marketplace_with_secrets;
         document.getElementById("marketplace-with-staticip").textContent = data.marketplace_with_staticip;
 
-        // ----------------------
-        // RESOURCES (APPS)
-        // ----------------------
-        document.getElementById("total-cpu").textContent = `${data.total_cpu} vCPU`;
+        // RESOURCES
+        document.getElementById("total-cpu").textContent = data.total_cpu + " vCPU";
         document.getElementById("total-ram").textContent = formatStorage(data.total_ram_gb);
         document.getElementById("total-hdd").textContent = formatStorage(data.total_hdd_gb);
 
-        // ----------------------
-        // RESOURCE USAGE BY TIER
-        // ----------------------
+        // TIER USAGE
         const tierUsage = data.tier_usage || {};
+        ["CUMULUS", "NIMBUS", "STRATUS"].forEach(t => {
+            const l = t.toLowerCase();
+            const u = tierUsage[t] || {};
+            document.getElementById(`tier-${l}-instances`).textContent = u.instances ?? 0;
+            document.getElementById(`tier-${l}-cpu`).textContent = (u.cpu ?? 0) + " vCPU";
+            document.getElementById(`tier-${l}-ram`).textContent = formatStorage(u.ram_gb);
+            document.getElementById(`tier-${l}-hdd`).textContent = formatStorage(u.hdd_gb);
+        });
 
-        function fillTierUsage(tierKey) {
-            const lower = tierKey.toLowerCase();
-            const u = tierUsage[tierKey] || {};
+        // NETWORK CAPACITY
+        document.getElementById("network-total-cpu").textContent = data.network_total_cpu + " vCPU";
+        document.getElementById("network-total-ram").textContent = formatTB(data.network_total_ram_tb);
+        document.getElementById("network-total-hdd").textContent = formatTB(data.network_total_hdd_tb);
 
-            const instEl = document.getElementById(`tier-${lower}-instances`);
-            const cpuEl = document.getElementById(`tier-${lower}-cpu`);
-            const ramEl = document.getElementById(`tier-${lower}-ram`);
-            const hddEl = document.getElementById(`tier-${lower}-hdd`);
-
-            if (instEl) instEl.textContent = u.instances ?? 0;
-            if (cpuEl) cpuEl.textContent = (u.cpu ?? 0) + " vCPU";
-            if (ramEl) ramEl.textContent = formatStorage(u.ram_gb);
-            if (hddEl) hddEl.textContent = formatStorage(u.hdd_gb);
-        }
-
-        ["CUMULUS", "NIMBUS", "STRATUS"].forEach(fillTierUsage);
-
-        // ----------------------
-        // NETWORK CAPACITY (ALL TIERS)
-        // ----------------------
-        document.getElementById("network-total-cpu").textContent =
-            (data.network_total_cpu ?? 0) + " vCPU";
-
-        document.getElementById("network-total-ram").textContent =
-            formatTB(data.network_total_ram_tb);
-
-        document.getElementById("network-total-hdd").textContent =
-            formatTB(data.network_total_hdd_tb);
-
-        // ----------------------
-        // NETWORK CAPACITY BY TIER
-        // ----------------------
         const tierCap = data.tier_capacity || {};
+        ["CUMULUS", "NIMBUS", "STRATUS"].forEach(t => {
+            const l = t.toLowerCase();
+            const c = tierCap[t] || {};
+            document.getElementById(`network-${l}-nodes`).textContent = c.nodes ?? 0;
+            document.getElementById(`network-${l}-cpu`).textContent = (c.cpu ?? 0) + " vCPU";
+            document.getElementById(`network-${l}-ram`).textContent = formatTB(c.ram_tb);
+            document.getElementById(`network-${l}-hdd`).textContent = formatTB(c.hdd_tb);
+        });
 
-        function fillTierCap(tierKey) {
-            const lower = tierKey.toLowerCase();
-            const c = tierCap[tierKey] || {};
-
-            const nodesEl = document.getElementById(`network-${lower}-nodes`);
-            const cpuEl = document.getElementById(`network-${lower}-cpu`);
-            const ramEl = document.getElementById(`network-${lower}-ram`);
-            const hddEl = document.getElementById(`network-${lower}-hdd`);
-
-            if (nodesEl) nodesEl.textContent = c.nodes ?? 0;
-            if (cpuEl) cpuEl.textContent = (c.cpu ?? 0) + " vCPU";
-            if (ramEl) ramEl.textContent = formatTB(c.ram_tb);
-            if (hddEl) hddEl.textContent = formatTB(c.hdd_tb);
-        }
-
-        ["CUMULUS", "NIMBUS", "STRATUS"].forEach(fillTierCap);
-
-        // ----------------------
-        // NETWORK UTILIZATION
-        // ----------------------
-        document.getElementById("cpu-util-pct").textContent =
-            (data.cpu_util_pct ?? 0) + "%";
-
-        document.getElementById("ram-util-pct").textContent =
-            (data.ram_util_pct ?? 0) + "%";
-
-        document.getElementById("hdd-util-pct").textContent =
-            (data.hdd_util_pct ?? 0) + "%";
+        // UTILIZATION
+        document.getElementById("cpu-util-pct").textContent = data.cpu_util_pct + "%";
+        document.getElementById("ram-util-pct").textContent = data.ram_util_pct + "%";
+        document.getElementById("hdd-util-pct").textContent = data.hdd_util_pct + "%";
 
         // TOP 5
         const tbody = document.querySelector("#top5-table tbody");
         tbody.innerHTML = "";
-
         data.top_marketplace_apps.forEach(app => {
             const row = document.createElement("tr");
             row.innerHTML = `<td>${app.name}</td><td>${app.deployments}</td>`;
@@ -153,24 +103,22 @@ async function loadStats() {
         });
 
     } catch (err) {
-        document.getElementById("loading").textContent = "Error loading data.";
         console.error(err);
+        document.getElementById("loading").textContent = "Error loading data.";
     }
 }
 
 loadStats();
 
+// --- refresh logic -------------------------------------------------------
 
-// --------------------------------------------------------
-// MANUAL REFRESH BUTTON + SPINNER + POLLING
-// --------------------------------------------------------
 document.getElementById("refresh-btn").addEventListener("click", async () => {
-    const statusEl = document.getElementById("refresh-status");
+    const status = document.getElementById("refresh-status");
     const spinner = document.getElementById("spinner");
-    const lastTimeBefore = document.getElementById("last-updated").textContent;
 
-    statusEl.textContent = "Refreshing...";
+    const oldTime = document.getElementById("last-updated").textContent;
     spinner.classList.remove("hidden");
+    status.textContent = "Refreshing...";
 
     const resp = await fetch("/refresh", {
         method: "POST",
@@ -179,34 +127,43 @@ document.getElementById("refresh-btn").addEventListener("click", async () => {
 
     const data = await resp.json();
 
-    if (data.status === "ok") {
-        statusEl.textContent = "Refresh started — updating shortly...";
-
-        // Poll every 2 seconds until timestamp updates
-        const poll = setInterval(async () => {
-            const statsResp = await fetch("/stats", { credentials: "include" });
-            const stats = await statsResp.json();
-
-            const newTime =
-                "Last updated: " + new Date(stats.last_updated).toLocaleString();
-
-            if (newTime !== lastTimeBefore) {
-                document.getElementById("last-updated").textContent = newTime;
-
-                clearInterval(poll);
-                spinner.classList.add("hidden");
-                statusEl.textContent = "";
-
-                loadStats();
-            }
-        }, 2000);
-    }
-    else if (data.status === "cooldown") {
-        statusEl.textContent = data.message;
+    if (data.status !== "ok") {
+        status.textContent = data.message;
         spinner.classList.add("hidden");
+        return;
     }
-    else {
-        statusEl.textContent = "Failed to refresh.";
-        spinner.classList.add("hidden");
-    }
+
+    status.textContent = "Refresh started — updating shortly...";
+
+    // Poll until cache updates
+    const poll = setInterval(async () => {
+        const r = await fetch("/stats", { credentials: "include" });
+        const stats = await r.json();
+        const newTime = "Last updated: " + new Date(stats.last_updated).toLocaleString();
+
+        if (newTime !== oldTime) {
+            clearInterval(poll);
+            spinner.classList.add("hidden");
+            status.textContent = "";
+            loadStats();
+        }
+    }, 2000);
+});
+
+// --- tab handling ---------------------------------------------------------
+
+document.querySelectorAll(".tab-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+        // Switch active button
+        document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+
+        const tab = btn.dataset.tab;
+
+        // Hide all tabs
+        document.querySelectorAll(".tab-content").forEach(c => c.classList.add("hidden"));
+
+        // Show selected tab
+        document.getElementById("tab-" + tab).classList.remove("hidden");
+    });
 });
