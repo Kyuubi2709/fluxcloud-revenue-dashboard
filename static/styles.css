@@ -31,10 +31,6 @@ h1, h2 {
     box-shadow: 0 1px 3px rgba(0,0,0,0.1);
 }
 
-.stat-box h3 {
-    margin: 0 0 5px 0;
-}
-
 table {
     width: 100%;
     background: white;
@@ -53,7 +49,7 @@ table th, table td {
     display: none;
 }
 
-/* Login box */
+/* LOGIN BOX */
 .login-box {
     max-width: 320px;
     margin: 30px auto;
@@ -66,7 +62,6 @@ table th, table td {
 .login-box label {
     display: block;
     margin-top: 10px;
-    font-weight: bold;
 }
 
 .login-box input {
@@ -85,25 +80,45 @@ table th, table td {
     color: white;
     border: none;
     border-radius: 4px;
-    cursor: pointer;
 }
 
-.error {
-    color: red;
-    margin-bottom: 10px;
-}
-
-/* Refresh Spinner */
+/* SPINNER */
 #spinner {
-    margin-top: 5px;
-    width: 26px;
-    height: 26px;
+    width: 28px;
+    height: 28px;
     border: 3px solid #ccc;
-    border-top-color: #222;
+    border-top-color: #000;
     border-radius: 50%;
     animation: spin 0.7s linear infinite;
+    margin-bottom: 15px;
 }
 
 @keyframes spin {
     to { transform: rotate(360deg); }
+}
+
+/* TABS */
+.tabs {
+    margin-top: 25px;
+    border-bottom: 2px solid #ccc;
+    display: flex;
+    gap: 10px;
+}
+
+.tab-btn {
+    padding: 10px 15px;
+    border: none;
+    background: #eee;
+    cursor: pointer;
+    border-radius: 4px 4px 0 0;
+    font-weight: bold;
+}
+
+.tab-btn.active {
+    background: white;
+    border-bottom: 2px solid white;
+}
+
+.tab-content {
+    margin-top: 20px;
 }
