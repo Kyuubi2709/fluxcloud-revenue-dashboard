@@ -5,7 +5,7 @@
     <title>FluxCloud Revenue Dashboard</title>
     <link rel="stylesheet" href="/static/styles.css">
 
-    <!-- Chart.js for Doughnut Charts -->
+    <!-- Chart.js for Donut Charts -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
@@ -163,68 +163,88 @@
 <!-- ========================= -->
 <div id="tab-resources" class="tab-content hidden">
 
-    <!-- Row 1: Totals vs Usage -->
-    <div class="section-row">
+    <!-- ROW 1: Capacity vs Usage/Utilization -->
+    <div class="two-col">
 
         <!-- Network Capacity (All Tiers) -->
-        <section class="section-box">
+        <div class="stat-box">
             <h2>Network Capacity (All Tiers)</h2>
-            <p class="section-desc">
-                Total raw compute, memory and storage capacity provisioned across all FluxNode tiers.
+            <p class="section-subtitle">
+                Total provisioned CPU, RAM, and storage across all Cumulus, Nimbus, and Stratus nodes.
             </p>
 
-            <div class="stat-grid three-cols">
-                <div class="stat-box small">
-                    <h3>Total vCPU</h3>
-                    <p id="network-total-cpu">–</p>
+            <div class="inline-metrics">
+                <div>
+                    <span class="metric-label">Total CPU</span>
+                    <span class="metric-value" id="network-total-cpu">–</span>
                 </div>
-                <div class="stat-box small">
-                    <h3>Total RAM</h3>
-                    <p id="network-total-ram">–</p>
+                <div>
+                    <span class="metric-label">Total RAM</span>
+                    <span class="metric-value" id="network-total-ram">–</span>
                 </div>
-                <div class="stat-box small">
-                    <h3>Total Storage</h3>
-                    <p id="network-total-hdd">–</p>
+                <div>
+                    <span class="metric-label">Total Storage</span>
+                    <span class="metric-value" id="network-total-hdd">–</span>
                 </div>
             </div>
-        </section>
+        </div>
 
-        <!-- Resources (App Usage) -->
-        <section class="section-box">
-            <h2>Resources (App Usage)</h2>
-            <p class="section-desc">
-                Live resources currently consumed by all running applications on the Flux network.
+        <!-- Network Utilization + Resources (App Usage) -->
+        <div class="stat-box">
+            <h2>Network Utilization</h2>
+            <p class="section-subtitle">
+                Share of total capacity currently consumed by all running app instances.
             </p>
 
-            <div class="stat-grid three-cols">
-                <div class="stat-box small">
-                    <h3>vCPU In Use</h3>
-                    <p id="total-cpu">–</p>
+            <div class="donut-row">
+                <div class="donut-wrapper">
+                    <canvas id="cpuUtilChart"></canvas>
+                    <p class="chart-label">CPU: <span id="cpu-util-pct">–</span></p>
                 </div>
-                <div class="stat-box small">
-                    <h3>RAM In Use</h3>
-                    <p id="total-ram">–</p>
+                <div class="donut-wrapper">
+                    <canvas id="ramUtilChart"></canvas>
+                    <p class="chart-label">RAM: <span id="ram-util-pct">–</span></p>
                 </div>
-                <div class="stat-box small">
-                    <h3>Storage In Use</h3>
-                    <p id="total-hdd">–</p>
+                <div class="donut-wrapper">
+                    <canvas id="hddUtilChart"></canvas>
+                    <p class="chart-label">Storage: <span id="hdd-util-pct">–</span></p>
                 </div>
             </div>
-        </section>
+
+            <h3 class="subsection-title">Resources (App Usage)</h3>
+            <p class="section-subtitle">
+                Absolute resources allocated to all active app instances across the network.
+            </p>
+
+            <div class="inline-metrics">
+                <div>
+                    <span class="metric-label">Used CPU</span>
+                    <span class="metric-value" id="total-cpu">–</span>
+                </div>
+                <div>
+                    <span class="metric-label">Used RAM</span>
+                    <span class="metric-value" id="total-ram">–</span>
+                </div>
+                <div>
+                    <span class="metric-label">Used Storage</span>
+                    <span class="metric-value" id="total-hdd">–</span>
+                </div>
+            </div>
+        </div>
     </div>
 
-    <!-- Row 2: Per-Tier Capacity vs Usage -->
-    <div class="section-row">
+    <!-- ROW 2: Capacity by Tier vs Usage by Tier -->
+    <div class="two-col">
 
         <!-- Network Capacity by Tier -->
-        <section class="section-box">
+        <div class="stat-box">
             <h2>Network Capacity by Tier</h2>
-            <p class="section-desc">
-                Provisioned node count and raw hardware capacity split by Cumulus, Nimbus and Stratus tiers.
+            <p class="section-subtitle">
+                Provisioned nodes and resources split by Cumulus, Nimbus, and Stratus.
             </p>
 
-            <div class="stat-grid">
-                <div class="stat-box">
+            <div class="tier-grid">
+                <div class="tier-box">
                     <h3>Cumulus Capacity</h3>
                     <p>Nodes: <span id="network-cumulus-nodes">–</span></p>
                     <p>CPU: <span id="network-cumulus-cpu">–</span></p>
@@ -232,7 +252,7 @@
                     <p>HDD: <span id="network-cumulus-hdd">–</span></p>
                 </div>
 
-                <div class="stat-box">
+                <div class="tier-box">
                     <h3>Nimbus Capacity</h3>
                     <p>Nodes: <span id="network-nimbus-nodes">–</span></p>
                     <p>CPU: <span id="network-nimbus-cpu">–</span></p>
@@ -240,7 +260,7 @@
                     <p>HDD: <span id="network-nimbus-hdd">–</span></p>
                 </div>
 
-                <div class="stat-box">
+                <div class="tier-box">
                     <h3>Stratus Capacity</h3>
                     <p>Nodes: <span id="network-stratus-nodes">–</span></p>
                     <p>CPU: <span id="network-stratus-cpu">–</span></p>
@@ -248,135 +268,108 @@
                     <p>HDD: <span id="network-stratus-hdd">–</span></p>
                 </div>
             </div>
-        </section>
+        </div>
 
-        <!-- Resource Usage by Tier (Donuts) -->
-        <section class="section-box">
+        <!-- Resource Usage by Tier -->
+        <div class="stat-box">
             <h2>Resource Usage by Tier</h2>
-            <p class="section-desc">
-                Per-tier view of app instances and CPU, RAM, and storage usage. Each ring shows used vs free capacity.
+            <p class="section-subtitle">
+                Actual CPU, RAM, storage and instance counts used on each node tier.
             </p>
 
-            <div class="tier-resource-grid">
-                <!-- Cumulus -->
-                <div class="tier-card">
-                    <h3>Cumulus Resource Usage</h3>
-                    <div class="chart-container">
-                        <canvas id="tier-resource-cumulus"></canvas>
-                    </div>
-                    <div class="tier-mini-stats">
-                        <span id="tier-mini-cumulus-instances">Instances: –</span>
-                        <span id="tier-mini-cumulus-cpu">CPU: –</span>
-                        <span id="tier-mini-cumulus-ram">RAM: –</span>
-                        <span id="tier-mini-cumulus-hdd">Storage: –</span>
-                    </div>
+            <div class="tier-grid">
+                <div class="tier-box">
+                    <h3>Cumulus Usage</h3>
+                    <p>Instances: <span id="rtu-cumulus-instances">–</span></p>
+                    <p>CPU: <span id="rtu-cumulus-cpu">–</span></p>
+                    <p>RAM: <span id="rtu-cumulus-ram">–</span></p>
+                    <p>HDD: <span id="rtu-cumulus-hdd">–</span></p>
                 </div>
 
-                <!-- Nimbus -->
-                <div class="tier-card">
-                    <h3>Nimbus Resource Usage</h3>
-                    <div class="chart-container">
-                        <canvas id="tier-resource-nimbus"></canvas>
-                    </div>
-                    <div class="tier-mini-stats">
-                        <span id="tier-mini-nimbus-instances">Instances: –</span>
-                        <span id="tier-mini-nimbus-cpu">CPU: –</span>
-                        <span id="tier-mini-nimbus-ram">RAM: –</span>
-                        <span id="tier-mini-nimbus-hdd">Storage: –</span>
-                    </div>
+                <div class="tier-box">
+                    <h3>Nimbus Usage</h3>
+                    <p>Instances: <span id="rtu-nimbus-instances">–</span></p>
+                    <p>CPU: <span id="rtu-nimbus-cpu">–</span></p>
+                    <p>RAM: <span id="rtu-nimbus-ram">–</span></p>
+                    <p>HDD: <span id="rtu-nimbus-hdd">–</span></p>
                 </div>
 
-                <!-- Stratus -->
-                <div class="tier-card">
-                    <h3>Stratus Resource Usage</h3>
-                    <div class="chart-container">
-                        <canvas id="tier-resource-stratus"></canvas>
-                    </div>
-                    <div class="tier-mini-stats">
-                        <span id="tier-mini-stratus-instances">Instances: –</span>
-                        <span id="tier-mini-stratus-cpu">CPU: –</span>
-                        <span id="tier-mini-stratus-ram">RAM: –</span>
-                        <span id="tier-mini-stratus-hdd">Storage: –</span>
-                    </div>
+                <div class="tier-box">
+                    <h3>Stratus Usage</h3>
+                    <p>Instances: <span id="rtu-stratus-instances">–</span></p>
+                    <p>CPU: <span id="rtu-stratus-cpu">–</span></p>
+                    <p>RAM: <span id="rtu-stratus-ram">–</span></p>
+                    <p>HDD: <span id="rtu-stratus-hdd">–</span></p>
                 </div>
             </div>
-        </section>
+        </div>
 
     </div>
 
-    <!-- Row 3: Global Utilization + Nodes Pie + Tier Util -->
-    <div class="section-row">
+    <!-- ROW 3: Tier Utilization vs Nodes Running Apps -->
+    <div class="two-col">
 
-        <!-- Network Utilization -->
-        <section class="section-box">
-            <h2>Network Utilization</h2>
-            <p class="section-desc">
-                Overall utilization of network-wide CPU, RAM and storage capacity by all running apps.
+        <!-- Tier Utilization -->
+        <div class="stat-box">
+            <h2>Tier Utilization</h2>
+            <p class="section-subtitle">
+                How much of each tier’s capacity is currently used by running apps.
             </p>
 
-            <div class="stat-grid">
-                <div class="stat-box small">
-                    <h3>CPU Utilization</h3>
-                    <p id="cpu-util-pct">–</p>
+            <div class="tier-grid">
+                <div class="tier-box">
+                    <h3>Cumulus</h3>
+                    <p>CPU Utilization: <span id="tier-util-cumulus-cpu">–</span></p>
+                    <p>RAM Utilization: <span id="tier-util-cumulus-ram">–</span></p>
+                    <p>HDD Utilization: <span id="tier-util-cumulus-hdd">–</span></p>
                 </div>
 
-                <div class="stat-box small">
-                    <h3>RAM Utilization</h3>
-                    <p id="ram-util-pct">–</p>
+                <div class="tier-box">
+                    <h3>Nimbus</h3>
+                    <p>CPU Utilization: <span id="tier-util-nimbus-cpu">–</span></p>
+                    <p>RAM Utilization: <span id="tier-util-nimbus-ram">–</span></p>
+                    <p>HDD Utilization: <span id="tier-util-nimbus-hdd">–</span></p>
                 </div>
 
-                <div class="stat-box small">
-                    <h3>HDD Utilization</h3>
-                    <p id="hdd-util-pct">–</p>
+                <div class="tier-box">
+                    <h3>Stratus</h3>
+                    <p>CPU Utilization: <span id="tier-util-stratus-cpu">–</span></p>
+                    <p>RAM Utilization: <span id="tier-util-stratus-ram">–</span></p>
+                    <p>HDD Utilization: <span id="tier-util-stratus-hdd">–</span></p>
                 </div>
             </div>
-        </section>
+        </div>
 
-        <!-- Nodes Running Apps + Tier Utilization -->
-        <section class="section-box">
+        <!-- Nodes Running Apps (By Tier) -->
+        <div class="stat-box">
             <h2>Nodes Running Apps (By Tier)</h2>
-            <p class="section-desc">
-                Share of nodes in each tier that currently host at least one app instance.
+            <p class="section-subtitle">
+                Distribution of nodes that currently host at least one app instance.
             </p>
 
-            <div class="chart-container">
+            <div class="donut-center-wrapper">
                 <canvas id="tierNodesChart"></canvas>
+                <div class="donut-center-text" id="tier-nodes-center">–</div>
             </div>
 
-            <div class="tier-nodes-summary">
-                <span id="nodes-cumulus-summary">Cumulus: –</span>
-                <span id="nodes-nimbus-summary">Nimbus: –</span>
-                <span id="nodes-stratus-summary">Stratus: –</span>
-            </div>
-
-            <h3 class="subheading">Tier Utilization</h3>
-            <p class="section-desc">
-                Per-tier utilization of CPU, RAM, and storage capacity used by running apps.
-            </p>
-
-            <div class="stat-grid">
-                <div class="stat-box">
-                    <h3>Cumulus Utilization</h3>
-                    <p>CPU: <span id="tier-util-cumulus-cpu">–</span></p>
-                    <p>RAM: <span id="tier-util-cumulus-ram">–</span></p>
-                    <p>HDD: <span id="tier-util-cumulus-hdd">–</span></p>
-                </div>
-
-                <div class="stat-box">
-                    <h3>Nimbus Utilization</h3>
-                    <p>CPU: <span id="tier-util-nimbus-cpu">–</span></p>
-                    <p>RAM: <span id="tier-util-nimbus-ram">–</span></p>
-                    <p>HDD: <span id="tier-util-nimbus-hdd">–</span></p>
-                </div>
-
-                <div class="stat-box">
-                    <h3>Stratus Utilization</h3>
-                    <p>CPU: <span id="tier-util-stratus-cpu">–</span></p>
-                    <p>RAM: <span id="tier-util-stratus-ram">–</span></p>
-                    <p>HDD: <span id="tier-util-stratus-hdd">–</span></p>
-                </div>
-            </div>
-        </section>
+            <ul class="nodes-legend">
+                <li>
+                    <span class="legend-color legend-cumulus"></span>
+                    Cumulus:
+                    <span id="tier-nodes-cumulus">–</span>
+                </li>
+                <li>
+                    <span class="legend-color legend-nimbus"></span>
+                    Nimbus:
+                    <span id="tier-nodes-nimbus">–</span>
+                </li>
+                <li>
+                    <span class="legend-color legend-stratus"></span>
+                    Stratus:
+                    <span id="tier-nodes-stratus">–</span>
+                </li>
+            </ul>
+        </div>
 
     </div>
 
