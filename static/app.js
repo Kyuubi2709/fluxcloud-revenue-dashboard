@@ -247,7 +247,7 @@ function fillResources(data) {
         obj = obj || {};
         const cpuEl = document.getElementById(idPrefix + "-cpu");
         const ramEl = document.getElementById(idPrefix + "-ram");
-        const hddEl = document.getElementById(idPrefix + "-hdd");
+        the hddEl = document.getElementById(idPrefix + "-hdd");
 
         if (cpuEl) cpuEl.textContent = (obj.cpu_util_pct ?? 0) + "%";
         if (ramEl) ramEl.textContent = (obj.ram_util_pct ?? 0) + "%";
@@ -300,7 +300,8 @@ async function loadStats() {
         document.getElementById("total-with-contacts").textContent = data.total_with_contacts;
         document.getElementById("total-contact-pct").textContent = data.total_contact_pct + "%";
         document.getElementById("custom-with-contacts").textContent = data.custom_with_contacts;
-        document.getElementById("custom-contact-pct").textContent = data.custom_contact_pct + "%";
+        document.getElementById("custom-contact-pct").textContent = data.custom_contact_p
+        + "%";
 
         // secrets & static ip (GENERAL TAB)
         document.getElementById("total-with-secrets").textContent = data.total_with_secrets;
@@ -371,6 +372,38 @@ async function loadStats() {
             row.innerHTML = `<td>${app.name}</td><td>${app.deployments}</td>`;
             tbody.appendChild(row);
         });
+
+        // -------------------------------
+        // NEW: APP EXPIRATION DURATIONS TABLE
+        // -------------------------------
+        const expireBody = document.querySelector("#expire-table tbody");
+        if (expireBody) {
+            expireBody.innerHTML = "";
+
+            const order = ["1w", "2w", "1m", "3m", "6m", "12m", "other"];
+            const labels = {
+                "1w": "1 Week",
+                "2w": "2 Weeks",
+                "1m": "1 Month",
+                "3m": "3 Months",
+                "6m": "6 Months",
+                "12m": "12 Months",
+                "other": "Other"
+            };
+
+            const dist = data.expire_distribution || {};
+            order.forEach(key => {
+                const entry = dist[key];
+                if (!entry) return;
+                const tr = document.createElement("tr");
+                tr.innerHTML = `
+                    <td>${labels[key]}</td>
+                    <td>${entry.count}</td>
+                    <td>${entry.pct}%</td>
+                `;
+                expireBody.appendChild(tr);
+            });
+        }
 
     } catch (err) {
         console.error(err);
