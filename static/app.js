@@ -1,5 +1,3 @@
-let tierNodesChart = null; // Chart.js instance for donut
-
 // --- formatting helpers --------------------------------------------------
 
 function formatStorage(gb) {
@@ -13,53 +11,62 @@ function formatTB(val) {
     return Number(val).toFixed(2) + " TB";
 }
 
-// -------------------------------------------------------------------------
-// DONUT CHART: Nodes running apps by tier
-// -------------------------------------------------------------------------
+// --- Chart.js center-text plugin & chart handle -------------------------
 
-// Plugin to draw text in the center of the donut
+let tierNodesChart = null;
+
+// Simple plugin to draw center text inside doughnut charts
 const centerTextPlugin = {
-    id: "centerTextPlugin",
-    afterDraw(chart, args, opts) {
-        const { ctx } = chart;
-        const txt = opts.text || "";
-        const sub = opts.subtext || "";
-        if (!txt) return;
+    id: "centerText",
+    afterDraw(chart, args, options) {
+        if (!options || !options.title) return;
 
-        const { left, right, top, bottom } = chart.chartArea;
+        const { ctx, chartArea } = chart;
+        if (!chartArea) return;
+
+        const { left, right, top, bottom } = chartArea;
         const x = (left + right) / 2;
         const y = (top + bottom) / 2;
 
         ctx.save();
         ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
+        ctx.fillStyle = options.color || "#333";
 
-        ctx.fillStyle = "#333";
-        ctx.font = "bold 16px Arial";
-        ctx.fillText(txt, x, y - 5);
+        ctx.font = "bold 14px Arial";
+        ctx.fillText(options.title, x, y - 4);
 
-        if (sub) {
+        if (options.subTitle) {
             ctx.font = "12px Arial";
-            ctx.fillText(sub, x, y + 14);
+            ctx.fillText(options.subTitle, x, y + 14);
         }
 
         ctx.restore();
     }
 };
 
-function drawTierNodesDonut(tierNodeUsage) {
-    const canvas = document.getElementById("tierNodesChart");
-    if (!canvas) return;
+// Register plugin if Chart.js is loaded
+if (window.Chart) {
+    Chart.register(centerTextPlugin);
+}
 
-    const ctx = canvas.getContext("2d");
+// -------------------------------------------------------------------------
+// NEW: Update Nodes Running Apps (By Tier) doughnut
+// -------------------------------------------------------------------------
+function updateTierNodesChart(data) {
+    if (!window.Chart) return;
 
-    const cumulusUsed = tierNodeUsage?.CUMULUS?.used_nodes ?? 0;
-    const nimbusUsed = tierNodeUsage?.NIMBUS?.used_nodes ?? 0;
-    const stratusUsed = tierNodeUsage?.STRATUS?.used_nodes ?? 0;
+    const ctx = document.getElementById("tierNodesChart");
+    if (!ctx) return;
 
-    const dataValues = [cumulusUsed, nimbusUsed, stratusUsed];
+    const nodeUsage = data.tier_node_usage || {};
+
+    const tierKeys = ["CUMULUS", "NIMBUS", "STRATUS"];
     const labels = ["Cumulus", "Nimbus", "Stratus"];
-    const totalUsed = dataValues.reduce((a, b) => a + b, 0);
+    const values = tierKeys.map(tier =>
+        (nodeUsage[tier] && nodeUsage[tier].used_nodes) ? nodeUsage[tier].used_nodes : 0
+    );
+
+    const totalNodes = values.reduce((sum, v) => sum + v, 0);
 
     if (tierNodesChart) {
         tierNodesChart.destroy();
@@ -68,35 +75,42 @@ function drawTierNodesDonut(tierNodeUsage) {
     tierNodesChart = new Chart(ctx, {
         type: "doughnut",
         data: {
-            labels,
+            labels: labels,
             datasets: [{
-                data: dataValues,
-                backgroundColor: ["#4285F4", "#34A853", "#A142F4"],
-                borderWidth: 1
+                data: values,
+                backgroundColor: [
+                    "#2b6cb0", // Cumulus - blue
+                    "#38a169", // Nimbus - green
+                    "#805ad5"  // Stratus - purple
+                ],
+                borderWidth: 0
             }]
         },
         options: {
-            cutout: "65%",
+            responsive: true,
+            maintainAspectRatio: false,
+            cutout: "60%",
             plugins: {
                 legend: {
                     position: "bottom"
                 },
                 tooltip: {
                     callbacks: {
-                        label: (tooltipItem) => {
-                            const label = tooltipItem.label || "";
-                            const value = tooltipItem.raw || 0;
-                            return `${label}: ${value} nodes`;
+                        label: function (context) {
+                            const label = context.label || "";
+                            const value = context.parsed || 0;
+                            const pct = totalNodes ? ((value / totalNodes) * 100).toFixed(1) : 0;
+                            return `${label}: ${value} nodes (${pct}%)`;
                         }
                     }
                 },
-                centerTextPlugin: {
-                    text: totalUsed.toString(),
-                    subtext: "nodes"
+                centerText: {
+                    title: `${totalNodes} nodes`,
+                    subTitle: "with \u22651 app",
+                    color: "#333"
                 }
             }
-        },
-        plugins: [centerTextPlugin]
+        }
     });
 }
 
@@ -120,10 +134,15 @@ function fillResources(data) {
 
     function loadTier(prefix, d) {
         d = d || {};
-        document.getElementById(prefix + "-instances").textContent = d.instances ?? 0;
-        document.getElementById(prefix + "-cpu").textContent = (d.cpu ?? 0).toFixed(2) + " vCPU";
-        document.getElementById(prefix + "-ram").textContent = formatStorage(d.ram_gb ?? 0);
-        document.getElementById(prefix + "-hdd").textContent = formatStorage(d.hdd_gb ?? 0);
+        const instEl = document.getElementById(prefix + "-instances");
+        const cpuEl = document.getElementById(prefix + "-cpu");
+        const ramEl = document.getElementById(prefix + "-ram");
+        const hddEl = document.getElementById(prefix + "-hdd");
+
+        if (instEl) instEl.textContent = d.instances ?? 0;
+        if (cpuEl) cpuEl.textContent = (d.cpu ?? 0).toFixed(2) + " vCPU";
+        if (ramEl) ramEl.textContent = formatStorage(d.ram_gb ?? 0);
+        if (hddEl) hddEl.textContent = formatStorage(d.hdd_gb ?? 0);
     }
 
     loadTier("rtu-cumulus", rtu.CUMULUS);
@@ -131,34 +150,34 @@ function fillResources(data) {
     loadTier("rtu-stratus", rtu.STRATUS);
 
     // GLOBAL UTILIZATION (real, resources-based)
-    document.getElementById("cpu-util-pct").textContent =
-        (data.resources_cpu_util_pct ?? 0) + "%";
+    const cpuUtilEl = document.getElementById("cpu-util-pct");
+    const ramUtilEl = document.getElementById("ram-util-pct");
+    const hddUtilEl = document.getElementById("hdd-util-pct");
 
-    document.getElementById("ram-util-pct").textContent =
-        (data.resources_ram_util_pct ?? 0) + "%";
-
-    document.getElementById("hdd-util-pct").textContent =
-        (data.resources_hdd_util_pct ?? 0) + "%";
+    if (cpuUtilEl) cpuUtilEl.textContent = (data.resources_cpu_util_pct ?? 0) + "%";
+    if (ramUtilEl) ramUtilEl.textContent = (data.resources_ram_util_pct ?? 0) + "%";
+    if (hddUtilEl) hddUtilEl.textContent = (data.resources_hdd_util_pct ?? 0) + "%";
 
     // PER-TIER UTILIZATION (%)
     const tu = data.tier_utilization || {};
 
     function setTierUtil(idPrefix, obj) {
         obj = obj || {};
-        document.getElementById(idPrefix + "-cpu").textContent =
-            (obj.cpu_util_pct ?? 0) + "%";
-        document.getElementById(idPrefix + "-ram").textContent =
-            (obj.ram_util_pct ?? 0) + "%";
-        document.getElementById(idPrefix + "-hdd").textContent =
-            (obj.hdd_util_pct ?? 0) + "%";
+        const cpuEl = document.getElementById(idPrefix + "-cpu");
+        const ramEl = document.getElementById(idPrefix + "-ram");
+        const hddEl = document.getElementById(idPrefix + "-hdd");
+
+        if (cpuEl) cpuEl.textContent = (obj.cpu_util_pct ?? 0) + "%";
+        if (ramEl) ramEl.textContent = (obj.ram_util_pct ?? 0) + "%";
+        if (hddEl) hddEl.textContent = (obj.hdd_util_pct ?? 0) + "%";
     }
 
     setTierUtil("tier-util-cumulus", tu.CUMULUS);
     setTierUtil("tier-util-nimbus", tu.NIMBUS);
     setTierUtil("tier-util-stratus", tu.STRATUS);
 
-    // DONUT: NODES RUNNING APPS BY TIER
-    drawTierNodesDonut(data.tier_node_usage || {});
+    // Update the doughnut chart for nodes running apps
+    updateTierNodesChart(data);
 }
 
 // --- load stats -----------------------------------------------------------
@@ -206,10 +225,10 @@ async function loadStats() {
         document.getElementById("marketplace-with-secrets").textContent = data.marketplace_with_secrets;
         document.getElementById("marketplace-with-staticip").textContent = data.marketplace_with_staticip;
 
-        // RESOURCES (new real usage + per-tier + per-tier utilization + donut)
+        // RESOURCES (new real usage + per-tier + per-tier utilization + chart)
         fillResources(data);
 
-        // NETWORK CAPACITY
+        // NETWORK CAPACITY (totals)
         document.getElementById("network-total-cpu").textContent =
             (data.network_total_cpu ?? 0) + " vCPU";
         document.getElementById("network-total-ram").textContent =
@@ -217,6 +236,7 @@ async function loadStats() {
         document.getElementById("network-total-hdd").textContent =
             formatTB(data.network_total_hdd_tb);
 
+        // NETWORK CAPACITY BY TIER
         const tierCap = data.tier_capacity || {};
         ["CUMULUS", "NIMBUS", "STRATUS"].forEach(t => {
             const l = t.toLowerCase();
@@ -273,8 +293,7 @@ document.getElementById("refresh-btn").addEventListener("click", async () => {
     const poll = setInterval(async () => {
         const r = await fetch("/stats", { credentials: "include" });
         const stats = await r.json();
-        const newTime = "Last updated: " +
-            new Date(stats.last_updated).toLocaleString();
+        const newTime = "Last updated: " + new Date(stats.last_updated).toLocaleString();
 
         if (newTime !== oldTime) {
             clearInterval(poll);
