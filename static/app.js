@@ -11,6 +11,9 @@ function formatTB(val) {
     return Number(val).toFixed(2) + " TB";
 }
 
+let tierChart = null; // chart instance pointer
+
+
 // -------------------------------------------------------------------------
 // NEW RESOURCES FILLER
 // -------------------------------------------------------------------------
@@ -69,7 +72,55 @@ function fillResources(data) {
     setTierUtil("tier-util-cumulus", tu.CUMULUS);
     setTierUtil("tier-util-nimbus", tu.NIMBUS);
     setTierUtil("tier-util-stratus", tu.STRATUS);
+
+    // ---------------------------------------------------------------------
+    // NEW PIE CHART: Nodes Running Apps by Tier
+    // ---------------------------------------------------------------------
+    const ns = data.tier_node_usage || {};
+    const nodeData = [
+        ns.CUMULUS?.used_nodes ?? 0,
+        ns.NIMBUS?.used_nodes ?? 0,
+        ns.STRATUS?.used_nodes ?? 0
+    ];
+
+    const ctx = document.getElementById("tierNodesChart").getContext("2d");
+
+    if (tierChart) tierChart.destroy(); // cleanup old instance
+
+    tierChart = new Chart(ctx, {
+        type: "pie",
+        data: {
+            labels: ["Cumulus", "Nimbus", "Stratus"],
+            datasets: [{
+                data: nodeData,
+                backgroundColor: [
+                    "#007bff", // blue
+                    "#17a2b8", // cyan
+                    "#6610f2"  // purple
+                ]
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                tooltip: {
+                    callbacks: {
+                        label: (ctx) => {
+                            const val = ctx.raw;
+                            const total = nodeData.reduce((a, b) => a + b, 0);
+                            const pct = total > 0 ? ((val / total) * 100).toFixed(1) : 0;
+                            return `${val} nodes (${pct}%)`;
+                        }
+                    }
+                },
+                legend: {
+                    position: "bottom"
+                }
+            }
+        }
+    });
 }
+
 
 // --- load stats -----------------------------------------------------------
 
@@ -116,7 +167,7 @@ async function loadStats() {
         document.getElementById("marketplace-with-secrets").textContent = data.marketplace_with_secrets;
         document.getElementById("marketplace-with-staticip").textContent = data.marketplace_with_staticip;
 
-        // RESOURCES (new real usage + per-tier + per-tier utilization)
+        // RESOURCES (new real usage + per-tier + pie chart)
         fillResources(data);
 
         // NETWORK CAPACITY
@@ -153,6 +204,7 @@ async function loadStats() {
 }
 
 loadStats();
+
 
 // --- refresh logic -------------------------------------------------------
 
@@ -193,6 +245,7 @@ document.getElementById("refresh-btn").addEventListener("click", async () => {
         }
     }, 2000);
 });
+
 
 // --- tab handling ---------------------------------------------------------
 
