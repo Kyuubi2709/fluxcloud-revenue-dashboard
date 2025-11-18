@@ -170,6 +170,16 @@ async function loadStats() {
         if (tbodySub) {
             tbodySub.innerHTML = "";
 
+            const planLabels = {
+                weekly: "1 Week",
+                biweekly: "2 Weeks",
+                monthly: "1 Month",
+                quarterly: "3 Months",
+                semiannual: "6 Months",
+                annual: "12 Months",
+                unknown: "Unknown"
+            };
+
             const plans = ["weekly","biweekly","monthly","quarterly","semiannual","annual","unknown"];
 
             plans.forEach(plan => {
@@ -179,7 +189,7 @@ async function loadStats() {
 
                 const row = document.createElement("tr");
                 row.innerHTML = `
-                    <td>${plan}</td>
+                    <td>${planLabels[plan] || plan}</td>
                     <td>${a.count} (${a.pct}%)</td>
                     <td>${m.count} (${m.pct}%)</td>
                     <td>${c.count} (${c.pct}%)</td>
