@@ -4,6 +4,9 @@
     <meta charset="UTF-8">
     <title>FluxCloud Revenue Dashboard</title>
     <link rel="stylesheet" href="/static/styles.css">
+
+    <!-- Chart.js for Pie Chart -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
 
@@ -155,7 +158,6 @@
     </div>
 </div>
 
-
 <!-- ========================= -->
 <!-- RESOURCES TAB CONTENT     -->
 <!-- ========================= -->
@@ -274,7 +276,16 @@
         </div>
     </div>
 
-    <!-- NEW: TIER UTILIZATION -->
+    <!-- ========================= -->
+    <!-- NEW PIE CHART VISUALIZATION -->
+    <!-- ========================= -->
+    <h2>Nodes Running Apps (By Tier)</h2>
+
+    <div style="width: 420px; margin: 0 auto;">
+        <canvas id="tierNodesChart"></canvas>
+    </div>
+
+    <!-- TIER UTILIZATION -->
     <h2>Tier Utilization</h2>
 
     <div class="stat-grid">
