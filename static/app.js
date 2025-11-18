@@ -11,62 +11,61 @@ function formatTB(val) {
     return Number(val).toFixed(2) + " TB";
 }
 
-// --- Chart.js center-text plugin & chart handle -------------------------
+// -------------------------------------------------------------------------
+// Chart.js center text plugin (for tier donut charts & nodes chart)
+// -------------------------------------------------------------------------
+let centerTextPluginRegistered = false;
 
-let tierNodesChart = null;
+function ensureCenterTextPlugin() {
+    if (centerTextPluginRegistered || typeof Chart === "undefined") return;
 
-// Simple plugin to draw center text inside doughnut charts
-const centerTextPlugin = {
-    id: "centerText",
-    afterDraw(chart, args, options) {
-        if (!options || !options.title) return;
+    const centerTextPlugin = {
+        id: "centerTextPlugin",
+        beforeDraw(chart, args, pluginOptions) {
+            const text = pluginOptions && pluginOptions.text;
+            if (!text) return;
 
-        const { ctx, chartArea } = chart;
-        if (!chartArea) return;
+            const { ctx, chartArea } = chart;
+            if (!chartArea) return;
 
-        const { left, right, top, bottom } = chartArea;
-        const x = (left + right) / 2;
-        const y = (top + bottom) / 2;
+            const { left, right, top, bottom, width, height } = chartArea;
 
-        ctx.save();
-        ctx.textAlign = "center";
-        ctx.fillStyle = options.color || "#333";
-
-        ctx.font = "bold 14px Arial";
-        ctx.fillText(options.title, x, y - 4);
-
-        if (options.subTitle) {
-            ctx.font = "12px Arial";
-            ctx.fillText(options.subTitle, x, y + 14);
+            ctx.save();
+            ctx.font = "600 14px Arial, sans-serif";
+            ctx.fillStyle = "#111827";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(text, left + width / 2, top + height / 2);
+            ctx.restore();
         }
+    };
 
-        ctx.restore();
-    }
-};
-
-// Register plugin if Chart.js is loaded
-if (window.Chart) {
     Chart.register(centerTextPlugin);
+    centerTextPluginRegistered = true;
 }
 
 // -------------------------------------------------------------------------
-// NEW: Update Nodes Running Apps (By Tier) doughnut
+// Global chart references
 // -------------------------------------------------------------------------
-function updateTierNodesChart(data) {
-    if (!window.Chart) return;
+let tierNodesChart = null;
+const tierResourceCharts = {};
+
+// -------------------------------------------------------------------------
+// Nodes pie chart (Nodes Running Apps By Tier)
+// -------------------------------------------------------------------------
+function renderTierNodesChart(data) {
+    if (typeof Chart === "undefined") return;
+    ensureCenterTextPlugin();
+
+    const usage = data.tier_node_usage || {};
+    const tiers = ["CUMULUS", "NIMBUS", "STRATUS"];
+    const labels = ["Cumulus", "Nimbus", "Stratus"];
+
+    const used = tiers.map(t => (usage[t] && usage[t].used_nodes) || 0);
+    const totalUsed = used.reduce((a, b) => a + b, 0);
 
     const ctx = document.getElementById("tierNodesChart");
     if (!ctx) return;
-
-    const nodeUsage = data.tier_node_usage || {};
-
-    const tierKeys = ["CUMULUS", "NIMBUS", "STRATUS"];
-    const labels = ["Cumulus", "Nimbus", "Stratus"];
-    const values = tierKeys.map(tier =>
-        (nodeUsage[tier] && nodeUsage[tier].used_nodes) ? nodeUsage[tier].used_nodes : 0
-    );
-
-    const totalNodes = values.reduce((sum, v) => sum + v, 0);
 
     if (tierNodesChart) {
         tierNodesChart.destroy();
@@ -75,47 +74,217 @@ function updateTierNodesChart(data) {
     tierNodesChart = new Chart(ctx, {
         type: "doughnut",
         data: {
-            labels: labels,
+            labels,
             datasets: [{
-                data: values,
-                backgroundColor: [
-                    "#2b6cb0", // Cumulus - blue
-                    "#38a169", // Nimbus - green
-                    "#805ad5"  // Stratus - purple
-                ],
-                borderWidth: 0
+                label: "Nodes running apps",
+                data: used,
+                backgroundColor: ["#3b82f6", "#8b5cf6", "#10b981"],
+                hoverOffset: 4
             }]
         },
         options: {
-            responsive: true,
-            maintainAspectRatio: false,
             cutout: "60%",
             plugins: {
                 legend: {
-                    position: "bottom"
+                    display: true,
+                    position: "bottom",
+                    labels: {
+                        usePointStyle: true
+                    }
                 },
                 tooltip: {
                     callbacks: {
                         label: function (context) {
                             const label = context.label || "";
                             const value = context.parsed || 0;
+                            const tierKey = tiers[context.dataIndex];
+                            const tierInfo = usage[tierKey] || {};
+                            const totalNodes = tierInfo.total_nodes || 0;
                             const pct = totalNodes ? ((value / totalNodes) * 100).toFixed(1) : 0;
-                            return `${label}: ${value} nodes (${pct}%)`;
+                            return `${label}: ${value} of ${totalNodes} nodes (${pct}%)`;
                         }
                     }
                 },
-                centerText: {
-                    title: `${totalNodes} nodes`,
-                    subTitle: "with \u22651 app",
-                    color: "#333"
+                centerTextPlugin: {
+                    text: totalUsed ? `${totalUsed} nodes` : "No nodes"
                 }
             }
+        }
+    });
+
+    // Text summaries below the chart
+    function setSummary(id, tierKey, label) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        const tierInfo = usage[tierKey] || {};
+        const usedNodes = tierInfo.used_nodes || 0;
+        const totalNodes = tierInfo.total_nodes || 0;
+        const pct = tierInfo.pct != null ? tierInfo.pct : (totalNodes ? (usedNodes / totalNodes) * 100 : 0);
+        el.textContent = `${label}: ${usedNodes.toLocaleString()} / ${totalNodes.toLocaleString()} nodes (${pct.toFixed(1)}%)`;
+    }
+
+    setSummary("nodes-cumulus-summary", "CUMULUS", "Cumulus");
+    setSummary("nodes-nimbus-summary", "NIMBUS", "Nimbus");
+    setSummary("nodes-stratus-summary", "STRATUS", "Stratus");
+}
+
+// -------------------------------------------------------------------------
+// Tier Resource Doughnuts (one donut per tier, 4 rings)
+// -------------------------------------------------------------------------
+function renderTierResourceCharts(data) {
+    if (typeof Chart === "undefined") return;
+    ensureCenterTextPlugin();
+
+    const rtu = data.resources_tier_usage || {};
+    const cap = data.tier_capacity || {};
+    const totalInstances = data.total_instances || 0;
+
+    const tiers = ["CUMULUS", "NIMBUS", "STRATUS"];
+    const tierLabels = {
+        CUMULUS: "Cumulus",
+        NIMBUS: "Nimbus",
+        STRATUS: "Stratus"
+    };
+
+    tiers.forEach(tier => {
+        const idKey = tier.toLowerCase();
+        const usage = rtu[tier] || {};
+        const capacity = cap[tier] || {};
+
+        // Values
+        const instancesUsed = usage.instances || 0;
+        const instancesTotal = totalInstances || instancesUsed; // avoid 0/0
+        const instancesFree = Math.max(instancesTotal - instancesUsed, 0);
+
+        const cpuUsed = usage.cpu || 0;
+        const cpuCap = capacity.cpu || cpuUsed;
+        const cpuFree = Math.max(cpuCap - cpuUsed, 0);
+
+        const ramUsed = usage.ram_gb || 0;
+        const ramCap = (capacity.ram_tb || 0) * 1000 || ramUsed;
+        const ramFree = Math.max(ramCap - ramUsed, 0);
+
+        const hddUsed = usage.hdd_gb || 0;
+        const hddCap = (capacity.hdd_tb || 0) * 1000 || hddUsed;
+        const hddFree = Math.max(hddCap - hddUsed, 0);
+
+        // Canvas
+        const ctx = document.getElementById(`tier-resource-${idKey}`);
+        if (!ctx) return;
+
+        if (tierResourceCharts[tier]) {
+            tierResourceCharts[tier].destroy();
+        }
+
+        tierResourceCharts[tier] = new Chart(ctx, {
+            type: "doughnut",
+            data: {
+                labels: ["Used", "Free"],
+                datasets: [
+                    {
+                        label: "Instances",
+                        data: [instancesUsed, instancesFree],
+                        backgroundColor: ["#10b981", "#d1fae5"],
+                        borderWidth: 0,
+                        meta: {
+                            total: instancesTotal,
+                            unit: "instances"
+                        }
+                    },
+                    {
+                        label: "CPU",
+                        data: [cpuUsed, cpuFree],
+                        backgroundColor: ["#ef4444", "#fee2e2"],
+                        borderWidth: 0,
+                        meta: {
+                            total: cpuCap,
+                            unit: "vCPU"
+                        }
+                    },
+                    {
+                        label: "RAM",
+                        data: [ramUsed, ramFree],
+                        backgroundColor: ["#3b82f6", "#dbeafe"],
+                        borderWidth: 0,
+                        meta: {
+                            total: ramCap,
+                            unit: "GB RAM"
+                        }
+                    },
+                    {
+                        label: "Storage",
+                        data: [hddUsed, hddFree],
+                        backgroundColor: ["#f59e0b", "#fef3c7"],
+                        borderWidth: 0,
+                        meta: {
+                            total: hddCap,
+                            unit: "GB storage"
+                        }
+                    }
+                ]
+            },
+            options: {
+                cutout: "55%",
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: "bottom",
+                        labels: { usePointStyle: true }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function (context) {
+                                const ds = context.dataset;
+                                const meta = ds.meta || {};
+                                const total = meta.total || 0;
+                                const unit = meta.unit || "";
+                                const value = context.parsed || 0;
+                                const kind = context.dataIndex === 0 ? "used" : "free";
+                                const pct = total ? ((value / total) * 100).toFixed(1) : 0;
+                                const valueStr = unit.includes("instances")
+                                    ? value.toLocaleString()
+                                    : value.toFixed(1);
+                                const totalStr = unit.includes("instances")
+                                    ? total.toLocaleString()
+                                    : total.toFixed(1);
+                                return `${ds.label} ${kind}: ${valueStr} of ${totalStr} ${unit} (${pct}%)`;
+                            }
+                        }
+                    },
+                    centerTextPlugin: {
+                        text: tierLabels[tier]
+                    }
+                }
+            }
+        });
+
+        // Mini stats text under each chart
+        const instEl = document.getElementById(`tier-mini-${idKey}-instances`);
+        const cpuEl = document.getElementById(`tier-mini-${idKey}-cpu`);
+        const ramEl = document.getElementById(`tier-mini-${idKey}-ram`);
+        const hddEl = document.getElementById(`tier-mini-${idKey}-hdd`);
+
+        if (instEl) {
+            const pctInst = instancesTotal ? ((instancesUsed / instancesTotal) * 100).toFixed(1) : 0;
+            instEl.textContent = `Instances: ${instancesUsed.toLocaleString()} of ${instancesTotal.toLocaleString()} (${pctInst}%)`;
+        }
+        if (cpuEl) {
+            const pctCpu = cpuCap ? ((cpuUsed / cpuCap) * 100).toFixed(1) : 0;
+            cpuEl.textContent = `CPU: ${cpuUsed.toFixed(1)} / ${cpuCap.toFixed(1)} vCPU (${pctCpu}%)`;
+        }
+        if (ramEl) {
+            const pctRam = ramCap ? ((ramUsed / ramCap) * 100).toFixed(1) : 0;
+            ramEl.textContent = `RAM: ${ramUsed.toFixed(1)} / ${ramCap.toFixed(1)} GB (${pctRam}%)`;
+        }
+        if (hddEl) {
+            const pctHdd = hddCap ? ((hddUsed / hddCap) * 100).toFixed(1) : 0;
+            hddEl.textContent = `Storage: ${hddUsed.toFixed(1)} / ${hddCap.toFixed(1)} GB (${pctHdd}%)`;
         }
     });
 }
 
 // -------------------------------------------------------------------------
-// RESOURCES FILLER
+// Resources filler (numbers + charts)
 // -------------------------------------------------------------------------
 function fillResources(data) {
 
@@ -129,55 +298,38 @@ function fillResources(data) {
     document.getElementById("total-hdd").textContent =
         formatStorage(data.resources_total_hdd_gb_used ?? 0);
 
-    // PER-TIER USAGE (real usage)
-    const rtu = data.resources_tier_usage || {};
-
-    function loadTier(prefix, d) {
-        d = d || {};
-        const instEl = document.getElementById(prefix + "-instances");
-        const cpuEl = document.getElementById(prefix + "-cpu");
-        const ramEl = document.getElementById(prefix + "-ram");
-        const hddEl = document.getElementById(prefix + "-hdd");
-
-        if (instEl) instEl.textContent = d.instances ?? 0;
-        if (cpuEl) cpuEl.textContent = (d.cpu ?? 0).toFixed(2) + " vCPU";
-        if (ramEl) ramEl.textContent = formatStorage(d.ram_gb ?? 0);
-        if (hddEl) hddEl.textContent = formatStorage(d.hdd_gb ?? 0);
-    }
-
-    loadTier("rtu-cumulus", rtu.CUMULUS);
-    loadTier("rtu-nimbus", rtu.NIMBUS);
-    loadTier("rtu-stratus", rtu.STRATUS);
-
     // GLOBAL UTILIZATION (real, resources-based)
-    const cpuUtilEl = document.getElementById("cpu-util-pct");
-    const ramUtilEl = document.getElementById("ram-util-pct");
-    const hddUtilEl = document.getElementById("hdd-util-pct");
+    document.getElementById("cpu-util-pct").textContent =
+        (data.resources_cpu_util_pct ?? 0) + "%";
 
-    if (cpuUtilEl) cpuUtilEl.textContent = (data.resources_cpu_util_pct ?? 0) + "%";
-    if (ramUtilEl) ramUtilEl.textContent = (data.resources_ram_util_pct ?? 0) + "%";
-    if (hddUtilEl) hddUtilEl.textContent = (data.resources_hdd_util_pct ?? 0) + "%";
+    document.getElementById("ram-util-pct").textContent =
+        (data.resources_ram_util_pct ?? 0) + "%";
+
+    document.getElementById("hdd-util-pct").textContent =
+        (data.resources_hdd_util_pct ?? 0) + "%";
 
     // PER-TIER UTILIZATION (%)
     const tu = data.tier_utilization || {};
 
     function setTierUtil(idPrefix, obj) {
         obj = obj || {};
-        const cpuEl = document.getElementById(idPrefix + "-cpu");
-        const ramEl = document.getElementById(idPrefix + "-ram");
-        const hddEl = document.getElementById(idPrefix + "-hdd");
-
-        if (cpuEl) cpuEl.textContent = (obj.cpu_util_pct ?? 0) + "%";
-        if (ramEl) ramEl.textContent = (obj.ram_util_pct ?? 0) + "%";
-        if (hddEl) hddEl.textContent = (obj.hdd_util_pct ?? 0) + "%";
+        document.getElementById(idPrefix + "-cpu").textContent =
+            (obj.cpu_util_pct ?? 0) + "%";
+        document.getElementById(idPrefix + "-ram").textContent =
+            (obj.ram_util_pct ?? 0) + "%";
+        document.getElementById(idPrefix + "-hdd").textContent =
+            (obj.hdd_util_pct ?? 0) + "%";
     }
 
     setTierUtil("tier-util-cumulus", tu.CUMULUS);
     setTierUtil("tier-util-nimbus", tu.NIMBUS);
     setTierUtil("tier-util-stratus", tu.STRATUS);
 
-    // Update the doughnut chart for nodes running apps
-    updateTierNodesChart(data);
+    // Render tier resource donuts
+    renderTierResourceCharts(data);
+
+    // Render nodes chart
+    renderTierNodesChart(data);
 }
 
 // --- load stats -----------------------------------------------------------
@@ -225,10 +377,10 @@ async function loadStats() {
         document.getElementById("marketplace-with-secrets").textContent = data.marketplace_with_secrets;
         document.getElementById("marketplace-with-staticip").textContent = data.marketplace_with_staticip;
 
-        // RESOURCES (new real usage + per-tier + per-tier utilization + chart)
+        // RESOURCES (numbers + charts)
         fillResources(data);
 
-        // NETWORK CAPACITY (totals)
+        // NETWORK CAPACITY TOTALS
         document.getElementById("network-total-cpu").textContent =
             (data.network_total_cpu ?? 0) + " vCPU";
         document.getElementById("network-total-ram").textContent =
@@ -236,7 +388,7 @@ async function loadStats() {
         document.getElementById("network-total-hdd").textContent =
             formatTB(data.network_total_hdd_tb);
 
-        // NETWORK CAPACITY BY TIER
+        // Network capacity by tier
         const tierCap = data.tier_capacity || {};
         ["CUMULUS", "NIMBUS", "STRATUS"].forEach(t => {
             const l = t.toLowerCase();
@@ -250,7 +402,7 @@ async function loadStats() {
         // TOP 5
         const tbody = document.querySelector("#top5-table tbody");
         tbody.innerHTML = "";
-        data.top_marketplace_apps.forEach(app => {
+        (data.top_marketplace_apps || []).forEach(app => {
             const row = document.createElement("tr");
             row.innerHTML = `<td>${app.name}</td><td>${app.deployments}</td>`;
             tbody.appendChild(row);
