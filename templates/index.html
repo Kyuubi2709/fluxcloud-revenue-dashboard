@@ -5,7 +5,7 @@
     <title>FluxCloud Revenue Dashboard</title>
     <link rel="stylesheet" href="/static/styles.css">
 
-    <!-- Chart.js for Donut Chart -->
+    <!-- Chart.js for Pie / Doughnut Charts -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
@@ -158,31 +158,40 @@
     </div>
 </div>
 
+
 <!-- ========================= -->
 <!-- RESOURCES TAB CONTENT     -->
 <!-- ========================= -->
 <div id="tab-resources" class="tab-content hidden">
 
-    <h2>Resources (App Usage)</h2>
+    <!-- RESOURCES (APP USAGE) -->
+    <h2>📦 Resources (App Usage)</h2>
+    <p style="color:#666; margin-top:-10px; margin-bottom:15px;">
+        Total CPU, RAM, and storage currently requested by all running applications.
+    </p>
 
     <div class="stat-grid">
         <div class="stat-box">
-            <h3>Total CPU</h3>
+            <h3>Total CPU Used</h3>
             <p id="total-cpu">–</p>
         </div>
 
         <div class="stat-box">
-            <h3>Total RAM</h3>
+            <h3>Total RAM Used</h3>
             <p id="total-ram">–</p>
         </div>
 
         <div class="stat-box">
-            <h3>Total HDD</h3>
+            <h3>Total HDD Used</h3>
             <p id="total-hdd">–</p>
         </div>
     </div>
 
-    <h2>Resource Usage by Tier</h2>
+    <!-- RESOURCE USAGE BY TIER -->
+    <h2>🧩 Resource Usage by Tier</h2>
+    <p style="color:#666; margin-top:-10px; margin-bottom:15px;">
+        Distribution of app instances and resources across Cumulus, Nimbus, and Stratus.
+    </p>
 
     <div class="stat-grid">
         <div class="stat-box">
@@ -210,7 +219,11 @@
         </div>
     </div>
 
-    <h2>Network Capacity (All Tiers)</h2>
+    <!-- NETWORK CAPACITY (ALL TIERS) -->
+    <h2>🔌 Network Capacity (All Tiers)</h2>
+    <p style="color:#666; margin-top:-10px; margin-bottom:15px;">
+        Total theoretical capacity available across the entire Flux node network.
+    </p>
 
     <div class="stat-grid">
         <div class="stat-box">
@@ -229,7 +242,11 @@
         </div>
     </div>
 
-    <h2>Network Capacity by Tier</h2>
+    <!-- NETWORK CAPACITY BY TIER -->
+    <h2>🌍 Network Capacity by Tier</h2>
+    <p style="color:#666; margin-top:-10px; margin-bottom:15px;">
+        Node counts and total capacity split by Cumulus, Nimbus, and Stratus tiers.
+    </p>
 
     <div class="stat-grid">
         <div class="stat-box">
@@ -257,7 +274,11 @@
         </div>
     </div>
 
-    <h2>Network Utilization</h2>
+    <!-- NETWORK UTILIZATION -->
+    <h2>📈 Network Utilization</h2>
+    <p style="color:#666; margin-top:-10px; margin-bottom:15px;">
+        Overall percentage of CPU, RAM, and HDD capacity currently consumed by applications.
+    </p>
 
     <div class="stat-grid">
         <div class="stat-box">
@@ -276,17 +297,21 @@
         </div>
     </div>
 
-    <!-- ========================= -->
-    <!-- DONUT: NODES RUNNING APPS -->
-    <!-- ========================= -->
-    <h2>Nodes Running Apps (By Tier)</h2>
+    <!-- NODES RUNNING APPS (DONUT) -->
+    <h2>🧮 Nodes Running Apps (By Tier)</h2>
+    <p style="color:#666; margin-top:-10px; margin-bottom:10px;">
+        Nodes that currently host at least one app, grouped by tier. Hover over the chart for exact counts and percentages.
+    </p>
 
-    <div style="width: 420px; margin: 0 auto;">
+    <div style="max-width:520px; margin:0 auto 25px auto;">
         <canvas id="tierNodesChart"></canvas>
     </div>
 
     <!-- TIER UTILIZATION -->
-    <h2>Tier Utilization</h2>
+    <h2>⚙ Tier Utilization</h2>
+    <p style="color:#666; margin-top:-10px; margin-bottom:15px;">
+        Per-tier utilization of CPU, RAM, and HDD based on real app usage.
+    </p>
 
     <div class="stat-grid">
         <div class="stat-box">
