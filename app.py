@@ -1,3 +1,4 @@
+
 from flask import Flask, jsonify, render_template, request, redirect, url_for, session
 import requests
 import re
@@ -22,16 +23,6 @@ API_URL_NODES = "https://api.runonflux.io/daemon/viewdeterministicfluxnodelist"
 
 # Marketplace app name pattern
 TIMESTAMP_REGEX = re.compile(r"\d{10,}$")
-
-# Subscription expiry block durations
-PLAN_BLOCKS = {
-    "weekly": 22000,
-    "biweekly": 44000,
-    "monthly": 88000,
-    "quarterly": 264000,
-    "semiannual": 528000,
-    "annual": 1056000,
-}
 
 # Your company Flux address
 TARGET_OWNER = "196GJWyLxzAw3MirTT7Bqs2iGpUQio29GH"
@@ -119,14 +110,10 @@ def analyze_apps(apps, nodes, locations=None):
     total_ram_mb = 0.0
     total_hdd_gb = 0.0
 
-    # Subscription counters
-    plan_counts_all = Counter()
-    plan_counts_marketplace = Counter()
-    plan_counts_custom = Counter()
-
     # Node tier map and capacity
     node_tier_map = {}
     tier_capacity = {tier: {"nodes": 0, "cpu": 0, "ram_gb": 0, "hdd_gb": 0} for tier in TIER_HW}
+
     tier_usage = {tier: {"instances": 0, "cpu": 0, "ram_gb": 0, "hdd_gb": 0} for tier in TIER_HW}
 
     # Build node tier mapping
@@ -135,8 +122,10 @@ def analyze_apps(apps, nodes, locations=None):
         raw_tier = node.get("tier") or ""
         if not ip or not raw_tier:
             continue
+
         ip_only = ip.split(":")[0] if isinstance(ip, str) else ip
         tier = str(raw_tier).upper()
+
         if tier in TIER_HW and ip_only:
             node_tier_map[ip_only] = tier
             tier_capacity[tier]["nodes"] += 1
@@ -166,15 +155,6 @@ def analyze_apps(apps, nodes, locations=None):
         if owner:
             unique_owners.add(owner)
 
-        # Determine subscription plan from expire
-        expire = int(app_info.get("expire", 0) or 0)
-        plan = "unknown"
-        for pname, blocks in PLAN_BLOCKS.items():
-            if expire == blocks:
-                plan = pname
-                break
-
-        # Resource parsing
         compose = app_info.get("compose", [])
         cpu_per_inst = 0.0
         ram_mb = 0.0
@@ -215,8 +195,8 @@ def analyze_apps(apps, nodes, locations=None):
         secrets = app_info.get("secrets", "")
         if not secrets and compose and isinstance(compose[0], dict):
             secrets = compose[0].get("secrets", "")
-        has_secrets = isinstance(secrets, str) and secrets.strip() != ""
 
+        has_secrets = isinstance(secrets, str) and secrets.strip() != ""
         staticip = bool(app_info.get("staticip", False))
 
         if has_secrets:
@@ -228,22 +208,21 @@ def analyze_apps(apps, nodes, locations=None):
 
         if is_marketplace:
             marketplace.append(name)
-            if has_contacts: marketplace_with_contacts += 1
-            if has_secrets: marketplace_with_secrets += 1
-            if staticip: marketplace_with_staticip += 1
-            plan_counts_marketplace[plan] += 1
+            if has_contacts:
+                marketplace_with_contacts += 1
+            if has_secrets:
+                marketplace_with_secrets += 1
+            if staticip:
+                marketplace_with_staticip += 1
         else:
             custom.append(name)
-            if has_contacts: custom_with_contacts += 1
-            plan_counts_custom[plan] += 1
-
-        plan_counts_all[plan] += 1
+            if has_contacts:
+                custom_with_contacts += 1
 
     # Top marketplace grouped
     base_names = [TIMESTAMP_REGEX.sub("", n) for n in marketplace]
     top5 = Counter(base_names).most_common(5)
 
-    # Percentages
     marketplace_pct = round((len(marketplace) / total) * 100, 2) if total else 0
     custom_pct = round((len(custom) / total) * 100, 2) if total else 0
 
@@ -259,19 +238,101 @@ def analyze_apps(apps, nodes, locations=None):
     ram_util_pct = round((total_ram_gb / network_total_ram_gb) * 100, 2) if network_total_ram_gb else 0
     hdd_util_pct = round((total_hdd_gb / network_total_hdd_gb) * 100, 2) if network_total_hdd_gb else 0
 
-    # Subscription stats output formatter
-    def plan_stats(counter, totalX):
-        out = {}
-        for plan, count in counter.items():
-            pct = round((count / totalX) * 100, 2) if totalX else 0
-            out[plan] = {"count": count, "pct": pct}
-        return out
+    tier_capacity_out = {}
+    for tier in TIER_HW:
+        c = tier_capacity[tier]
+        tier_capacity_out[tier] = {
+            "nodes": c["nodes"],
+            "cpu": c["cpu"],
+            "ram_tb": round((c["ram_gb"] / 1000) if c["ram_gb"] else 0, 2),
+            "hdd_tb": round((c["hdd_gb"] / 1000) if c["hdd_gb"] else 0, 2),
+        }
 
-    subscription_stats = {
-        "all": plan_stats(plan_counts_all, total),
-        "marketplace": plan_stats(plan_counts_marketplace, len(marketplace)),
-        "custom": plan_stats(plan_counts_custom, len(custom)),
+    # =====================================================================
+    # REAL USAGE via locations
+    # =====================================================================
+    resources_total_cpu_used = 0.0
+    resources_total_ram_mb_used = 0.0
+    resources_total_hdd_gb_used = 0.0
+
+    resources_tier_usage = {t: {"instances": 0, "cpu": 0, "ram_gb": 0, "hdd_gb": 0} for t in TIER_HW}
+    resources_tier_usage["UNKNOWN"] = {"instances": 0, "cpu": 0, "ram_gb": 0, "hdd_gb": 0}
+
+    # Track nodes running at least one instance
+    used_nodes = {tier: set() for tier in TIER_HW}
+
+    for loc in locations:
+        app_name = loc.get("name") or loc.get("app") or ""
+        if not app_name:
+            continue
+
+        res = app_resource_map.get(app_name, None)
+        cpu = float(res["cpu"]) if res else 0.0
+        ram_mb = float(res["ram_mb"]) if res else 0.0
+        hdd_gb = float(res["hdd_gb"]) if res else 0.0
+
+        ip_raw = loc.get("ip", "")
+        ip_only = ip_raw.split(":")[0] if isinstance(ip_raw, str) else ip_raw
+        tier = node_tier_map.get(ip_only)
+
+        bucket = tier if tier in TIER_HW else "UNKNOWN"
+
+        resources_tier_usage[bucket]["instances"] += 1
+        resources_tier_usage[bucket]["cpu"] += cpu
+        resources_tier_usage[bucket]["ram_gb"] += ram_mb / 1024 if ram_mb else 0
+        resources_tier_usage[bucket]["hdd_gb"] += hdd_gb
+
+        resources_total_cpu_used += cpu
+        resources_total_ram_mb_used += ram_mb
+        resources_total_hdd_gb_used += hdd_gb
+
+        if tier in used_nodes:
+            used_nodes[tier].add(ip_only)
+
+    resources_total_ram_gb_used = (
+        resources_total_ram_mb_used / 1024 if resources_total_ram_mb_used else 0
+    )
+
+    resources_cpu_util_pct = round((resources_total_cpu_used / network_total_cpu) * 100, 2) if network_total_cpu else 0
+    resources_ram_util_pct = round((resources_total_ram_gb_used / network_total_ram_gb) * 100, 2) if network_total_ram_gb else 0
+    resources_hdd_util_pct = round((resources_total_hdd_gb_used / network_total_hdd_gb) * 100, 2) if network_total_hdd_gb else 0
+
+    resources_tier_usage_out = {
+        tier: {
+            "instances": u["instances"],
+            "cpu": round(u["cpu"], 2),
+            "ram_gb": round(u["ram_gb"], 2),
+            "hdd_gb": round(u["hdd_gb"], 2),
+        }
+        for tier, u in resources_tier_usage.items()
     }
+
+    # NEW: per-tier utilization (real usage)
+    tier_utilization = {}
+    for tier in TIER_HW:
+        cap = tier_capacity[tier]
+        u = resources_tier_usage.get(tier, {"cpu": 0, "ram_gb": 0, "hdd_gb": 0})
+
+        tier_utilization[tier] = {
+            "cpu_util_pct": round((u["cpu"] / cap["cpu"]) * 100, 2) if cap["cpu"] else 0,
+            "ram_util_pct": round((u["ram_gb"] / cap["ram_gb"]) * 100, 2) if cap["ram_gb"] else 0,
+            "hdd_util_pct": round((u["hdd_gb"] / cap["hdd_gb"]) * 100, 2) if cap["hdd_gb"] else 0,
+        }
+
+    # =========================================================================
+    # NEW: TIER NODE UTILIZATION (for pie chart)
+    # =========================================================================
+    tier_node_usage = {}
+    for tier in TIER_HW:
+        used = len(used_nodes[tier])
+        total_nodes = tier_capacity[tier]["nodes"]
+        pct = round((used / total_nodes) * 100, 2) if total_nodes else 0
+
+        tier_node_usage[tier] = {
+            "used_nodes": used,
+            "total_nodes": total_nodes,
+            "pct": pct
+        }
 
     return {
         "total_apps": total,
@@ -298,7 +359,31 @@ def analyze_apps(apps, nodes, locations=None):
         "marketplace_with_secrets": marketplace_with_secrets,
         "marketplace_with_staticip": marketplace_with_staticip,
 
-        "subscription_stats": subscription_stats,
+        "total_cpu": round(total_cpu, 2),
+        "total_ram_gb": round(total_ram_gb, 2),
+        "total_hdd_gb": round(total_hdd_gb, 2),
+
+        "network_total_cpu": network_total_cpu,
+        "network_total_ram_tb": round(network_total_ram_tb, 2),
+        "network_total_hdd_tb": round(network_total_hdd_tb, 2),
+        "tier_capacity": tier_capacity_out,
+
+        "cpu_util_pct": cpu_util_pct,
+        "ram_util_pct": ram_util_pct,
+        "hdd_util_pct": hdd_util_pct,
+
+        "resources_total_cpu_used": round(resources_total_cpu_used, 2),
+        "resources_total_ram_gb_used": round(resources_total_ram_gb_used, 2),
+        "resources_total_hdd_gb_used": round(resources_total_hdd_gb_used, 2),
+        "resources_cpu_util_pct": resources_cpu_util_pct,
+        "resources_ram_util_pct": resources_ram_util_pct,
+        "resources_hdd_util_pct": resources_hdd_util_pct,
+        "resources_tier_usage": resources_tier_usage_out,
+
+        "tier_utilization": tier_utilization,
+
+        # NEW!
+        "tier_node_usage": tier_node_usage,
 
         "top_marketplace_apps": [
             {"name": n, "deployments": c} for n, c in top5
