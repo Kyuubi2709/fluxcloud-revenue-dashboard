@@ -26,7 +26,6 @@
 <div class="tabs">
     <button class="tab-btn active" data-tab="general">General</button>
     <button class="tab-btn" data-tab="resources">Resources</button>
-    <button class="tab-btn" data-tab="finances">Finances</button>
 </div>
 
 <!-- ========================= -->
@@ -38,6 +37,7 @@
 
         <!-- MAIN METRICS -->
         <div class="stat-grid">
+
             <div class="stat-box">
                 <h3>Total Applications</h3>
                 <p id="total-apps">–</p>
@@ -57,6 +57,7 @@
                 <h3>Unique Owners</h3>
                 <p id="unique-owners">–</p>
             </div>
+
         </div>
 
         <!-- ADDITIONAL METRICS -->
@@ -138,6 +139,7 @@
                 <h3>Marketplace: Static IP</h3>
                 <p id="marketplace-with-staticip">–</p>
             </div>
+
         </div>
 
         <!-- TOP 5 -->
@@ -148,25 +150,6 @@
                 <tr>
                     <th>App Name</th>
                     <th>Deployments</th>
-                </tr>
-            </thead>
-            <tbody></tbody>
-        </table>
-
-
-        <!-- SUBSCRIPTION DURATION TABLE -->
-        <h2 style="margin-top:28px;">Subscription Durations</h2>
-        <p class="section-subtitle">
-            Shows how long applications are registered for (1 week, 1 month, etc).
-        </p>
-
-        <table id="subscription-table">
-            <thead>
-                <tr>
-                    <th>Plan</th>
-                    <th>All Apps</th>
-                    <th>Marketplace</th>
-                    <th>Custom</th>
                 </tr>
             </thead>
             <tbody></tbody>
@@ -386,52 +369,6 @@
                     <span id="tier-nodes-stratus">–</span>
                 </li>
             </ul>
-        </div>
-
-    </div>
-
-</div>
-
-<!-- ========================= -->
-<!-- FINANCES TAB CONTENT      -->
-<!-- ========================= -->
-<div id="tab-finances" class="tab-content hidden">
-
-    <h2>Financial Metrics Overview</h2>
-    <p class="section-subtitle">
-        Core application distribution metrics useful for revenue and pricing analysis.
-    </p>
-
-    <div class="stat-grid">
-
-        <div class="stat-box">
-            <h3>Total Applications</h3>
-            <p id="fin-total-apps">–</p>
-        </div>
-
-        <div class="stat-box">
-            <h3>Marketplace Apps</h3>
-            <p id="fin-marketplace-apps">–</p>
-        </div>
-
-        <div class="stat-box">
-            <h3>Custom Apps</h3>
-            <p id="fin-custom-apps">–</p>
-        </div>
-
-        <div class="stat-box">
-            <h3>Marketplace %</h3>
-            <p id="fin-marketplace-pct">–</p>
-        </div>
-
-        <div class="stat-box">
-            <h3>Custom %</h3>
-            <p id="fin-custom-pct">–</p>
-        </div>
-
-        <div class="stat-box">
-            <h3>Company Deployments</h3>
-            <p id="fin-company-deployments">–</p>
         </div>
 
     </div>
