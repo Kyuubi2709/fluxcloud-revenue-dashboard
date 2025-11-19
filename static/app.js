@@ -46,6 +46,7 @@ if (typeof Chart !== "undefined") {
 // -------------------------------------------------------------------------
 // CHART RENDERING HELPERS
 // -------------------------------------------------------------------------
+
 function renderUtilizationDonuts(data) {
     if (typeof Chart === "undefined") return;
 
@@ -56,7 +57,8 @@ function renderUtilizationDonuts(data) {
     const usedColor = "#2979FF";
     const freeColor = "#E0E0E0";
 
-    function upsertDonut(existing, canvasId, usedPct) {
+    // Helper to create/update a donut
+    function upsertDonut(existing, canvasId, usedPct, label) {
         const ctx = document.getElementById(canvasId);
         if (!ctx) return existing;
 
@@ -87,9 +89,10 @@ function renderUtilizationDonuts(data) {
                     legend: { display: false },
                     tooltip: {
                         callbacks: {
-                            label: function (t) {
-                                const value = t.raw ?? 0;
-                                return `${value.toFixed(1)}%`;
+                            label: function (tooltipItem) {
+                                const label = tooltipItem.label || "";
+                                const value = tooltipItem.raw ?? 0;
+                                return `${label}: ${value.toFixed(1)}%`;
                             }
                         }
                     },
@@ -101,37 +104,167 @@ function renderUtilizationDonuts(data) {
         });
     }
 
-    cpuUtilChart = upsertDonut(cpuUtilChart, "cpuUtilChart", usedCpuPct);
-    ramUtilChart = upsertDonut(ramUtilChart, "ramUtilChart", usedRamPct);
-    hddUtilChart = upsertDonut(hddUtilChart, "hddUtilChart", usedHddPct);
+    cpuUtilChart = upsertDonut(cpuUtilChart, "cpuUtilChart", usedCpuPct, "CPU");
+    ramUtilChart = upsertDonut(ramUtilChart, "ramUtilChart", usedRamPct, "RAM");
+    hddUtilChart = upsertDonut(hddUtilChart, "hddUtilChart", usedHddPct, "Storage");
+}
+
+function renderTierNodesDonut(data) {
+    if (typeof Chart === "undefined") return;
+
+    const tnu = data.tier_node_usage || {};
+
+    const cum = tnu.CUMULUS || {};
+    const nim = tnu.NIMBUS || {};
+    const str = tnu.STRATUS || {};
+
+    const cUsed = cum.used_nodes ?? 0;
+    const nUsed = nim.used_nodes ?? 0;
+    const sUsed = str.used_nodes ?? 0;
+
+    const totalUsed = cUsed + nUsed + sUsed;
+
+    // Update center text + legend text
+    const centerEl = document.getElementById("tier-nodes-center");
+    if (centerEl) {
+        centerEl.textContent = totalUsed ? `${totalUsed} nodes` : "No active nodes";
+    }
+
+    const fmtNodeText = (tier, obj) => {
+        const used = obj.used_nodes ?? 0;
+        const total = obj.total_nodes ?? 0;
+        const pct = obj.pct ?? 0;
+        if (!total) return "–";
+        return `${used}/${total} nodes (${pct.toFixed(1)}%)`;
+    };
+
+    const cEl = document.getElementById("tier-nodes-cumulus");
+    const nEl = document.getElementById("tier-nodes-nimbus");
+    const sEl = document.getElementById("tier-nodes-stratus");
+
+    if (cEl) cEl.textContent = fmtNodeText("CUMULUS", cum);
+    if (nEl) nEl.textContent = fmtNodeText("NIMBUS", nim);
+    if (sEl) sEl.textContent = fmtNodeText("STRATUS", str);
+
+    const ctx = document.getElementById("tierNodesChart");
+    if (!ctx) return;
+
+    const dataArr = [cUsed, nUsed, sUsed];
+
+    if (tierNodesChart) {
+        tierNodesChart.data.datasets[0].data = dataArr;
+        tierNodesChart.update();
+        return;
+    }
+
+    tierNodesChart = new Chart(ctx, {
+        type: "doughnut",
+        data: {
+            labels: ["Cumulus", "Nimbus", "Stratus"],
+            datasets: [{
+                data: dataArr,
+                backgroundColor: ["#42A5F5", "#66BB6A", "#FFA726"],
+                borderWidth: 0
+            }]
+        },
+        options: {
+            responsive: true,
+            cutout: "70%",
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: function (tooltipItem) {
+                            const label = tooltipItem.label || "";
+                            const value = tooltipItem.raw ?? 0;
+                            const total = totalUsed || 1;
+                            const pct = (value / total) * 100;
+                            return `${label}: ${value} nodes (${pct.toFixed(1)}%)`;
+                        }
+                    }
+                }
+            }
+        }
+    });
 }
 
 // -------------------------------------------------------------------------
-// Fill Resources
+// RESOURCES FILLER (keeps all existing metrics)
 // -------------------------------------------------------------------------
 function fillResources(data) {
+
+    // TOTAL USAGE (real usage from /apps/locations)
+    const totalCpuUsed = data.resources_total_cpu_used ?? 0;
+    const totalRamUsedGb = data.resources_total_ram_gb_used ?? 0;
+    const totalHddUsedGb = data.resources_total_hdd_gb_used ?? 0;
+
     document.getElementById("total-cpu").textContent =
-        (data.resources_total_cpu_used ?? 0).toFixed(2) + " vCPU";
+        totalCpuUsed.toFixed(2) + " vCPU";
 
     document.getElementById("total-ram").textContent =
-        formatStorage(data.resources_total_ram_gb_used);
+        formatStorage(totalRamUsedGb);
 
     document.getElementById("total-hdd").textContent =
-        formatStorage(data.resources_total_hdd_gb_used);
+        formatStorage(totalHddUsedGb);
 
-    document.getElementById("cpu-util-pct").textContent =
-        (data.resources_cpu_util_pct ?? 0) + "%";
-    document.getElementById("ram-util-pct").textContent =
-        (data.resources_ram_util_pct ?? 0) + "%";
-    document.getElementById("hdd-util-pct").textContent =
-        (data.resources_hdd_util_pct ?? 0) + "%";
+    // PER-TIER USAGE (real usage)
+    const rtu = data.resources_tier_usage || {};
 
+    function loadTier(prefix, d) {
+        d = d || {};
+        const instEl = document.getElementById(prefix + "-instances");
+        const cpuEl = document.getElementById(prefix + "-cpu");
+        const ramEl = document.getElementById(prefix + "-ram");
+        const hddEl = document.getElementById(prefix + "-hdd");
+
+        if (instEl) instEl.textContent = d.instances ?? 0;
+        if (cpuEl) cpuEl.textContent = ((d.cpu ?? 0).toFixed(2)) + " vCPU";
+        if (ramEl) ramEl.textContent = formatStorage(d.ram_gb ?? 0);
+        if (hddEl) hddEl.textContent = formatStorage(d.hdd_gb ?? 0);
+    }
+
+    loadTier("rtu-cumulus", rtu.CUMULUS);
+    loadTier("rtu-nimbus", rtu.NIMBUS);
+    loadTier("rtu-stratus", rtu.STRATUS);
+
+    // GLOBAL UTILIZATION (resources-based)
+    const cpuPct = data.resources_cpu_util_pct ?? 0;
+    const ramPct = data.resources_ram_util_pct ?? 0;
+    const hddPct = data.resources_hdd_util_pct ?? 0;
+
+    const cpuPctEl = document.getElementById("cpu-util-pct");
+    const ramPctEl = document.getElementById("ram-util-pct");
+    const hddPctEl = document.getElementById("hdd-util-pct");
+
+    if (cpuPctEl) cpuPctEl.textContent = cpuPct + "%";
+    if (ramPctEl) ramPctEl.textContent = ramPct + "%";
+    if (hddPctEl) hddPctEl.textContent = hddPct + "%";
+
+    // PER-TIER UTILIZATION (%)
+    const tu = data.tier_utilization || {};
+
+    function setTierUtil(idPrefix, obj) {
+        obj = obj || {};
+        const cpuEl = document.getElementById(idPrefix + "-cpu");
+        const ramEl = document.getElementById(idPrefix + "-ram");
+        const hddEl = document.getElementById(idPrefix + "-hdd");
+
+        if (cpuEl) cpuEl.textContent = (obj.cpu_util_pct ?? 0) + "%";
+        if (ramEl) ramEl.textContent = (obj.ram_util_pct ?? 0) + "%";
+        if (hddEl) hddEl.textContent = (obj.hdd_util_pct ?? 0) + "%";
+    }
+
+    setTierUtil("tier-util-cumulus", tu.CUMULUS);
+    setTierUtil("tier-util-nimbus", tu.NIMBUS);
+    setTierUtil("tier-util-stratus", tu.STRATUS);
+
+    // Charts
     renderUtilizationDonuts(data);
+    renderTierNodesDonut(data);
 }
 
-// -------------------------------------------------------------------------
-// loadStats()
-// -------------------------------------------------------------------------
+// --- load stats -----------------------------------------------------------
+
 async function loadStats() {
     try {
         const resp = await fetch("/stats", { credentials: "include" });
@@ -146,57 +279,65 @@ async function loadStats() {
 
         document.getElementById("content").classList.remove("hidden");
 
+        // BASIC COUNTS
         document.getElementById("total-apps").textContent = data.total_apps;
         document.getElementById("marketplace-apps").textContent = data.marketplace_apps;
         document.getElementById("custom-apps").textContent = data.custom_apps;
         document.getElementById("unique-owners").textContent = data.unique_owners;
 
+        // PERCENTAGES
+        document.getElementById("marketplace-pct").textContent = data.marketplace_pct + "%";
+        document.getElementById("custom-pct").textContent = data.custom_pct + "%";
+
+        // INSTANCES
+        document.getElementById("total-instances").textContent = data.total_instances;
+        document.getElementById("company-deployments").textContent = data.company_deployments;
+        document.getElementById("company-instances").textContent = data.company_instances;
+
+        // CONTACTS
+        document.getElementById("marketplace-with-contacts").textContent = data.marketplace_with_contacts;
+        document.getElementById("marketplace-contact-pct").textContent = data.marketplace_contact_pct + "%";
+        document.getElementById("total-with-contacts").textContent = data.total_with_contacts;
+        document.getElementById("total-contact-pct").textContent = data.total_contact_pct + "%";
+        document.getElementById("custom-with-contacts").textContent = data.custom_with_contacts;
+        document.getElementById("custom-contact-pct").textContent = data.custom_contact_pct + "%";
+
+        // secrets & static ip
+        document.getElementById("total-with-secrets").textContent = data.total_with_secrets;
+        document.getElementById("total-with-staticip").textContent = data.total_with_staticip;
+        document.getElementById("marketplace-with-secrets").textContent = data.marketplace_with_secrets;
+        document.getElementById("marketplace-with-staticip").textContent = data.marketplace_with_staticip;
+
+        // RESOURCES (real usage + per-tier + tier utilization + charts)
         fillResources(data);
 
-        // TOP 5 TABLE
+        // NETWORK CAPACITY (totals)
+        document.getElementById("network-total-cpu").textContent =
+            (data.network_total_cpu ?? 0) + " vCPU";
+        document.getElementById("network-total-ram").textContent =
+            formatTB(data.network_total_ram_tb);
+        document.getElementById("network-total-hdd").textContent =
+            formatTB(data.network_total_hdd_tb);
+
+        // NETWORK CAPACITY BY TIER
+        const tierCap = data.tier_capacity || {};
+        ["CUMULUS", "NIMBUS", "STRATUS"].forEach(t => {
+            const l = t.toLowerCase();
+            const c = tierCap[t] || {};
+            document.getElementById(`network-${l}-nodes`).textContent = c.nodes ?? 0;
+            document.getElementById(`network-${l}-cpu`).textContent = (c.cpu ?? 0) + " vCPU";
+            document.getElementById(`network-${l}-ram`).textContent = formatTB(c.ram_tb);
+            document.getElementById(`network-${l}-hdd`).textContent = formatTB(c.hdd_tb);
+        });
+
+        // TOP 5
         const tbody = document.querySelector("#top5-table tbody");
         tbody.innerHTML = "";
         data.top_marketplace_apps.forEach(app => {
-            const tr = document.createElement("tr");
-            tr.innerHTML = `<td>${app.name}</td><td>${app.deployments}</td>`;
-            tbody.appendChild(tr);
+            const row = document.createElement("tr");
+            row.innerHTML = `<td>${app.name}</td><td>${app.deployments}</td>`;
+            tbody.appendChild(row);
         });
-
-        // ============================
-        // SUBSCRIPTION DURATION TABLE
-        // ============================
-        const sub = data.subscription_stats || {};
-        const tbodySub = document.querySelector("#subscription-table tbody");
-        if (tbodySub) {
-            tbodySub.innerHTML = "";
-
-            const planLabels = {
-                weekly: "1 Week",
-                biweekly: "2 Weeks",
-                monthly: "1 Month",
-                quarterly: "3 Months",
-                semiannual: "6 Months",
-                annual: "12 Months",
-                unknown: "Unknown"
-            };
-
-            const plans = ["weekly","biweekly","monthly","quarterly","semiannual","annual","unknown"];
-
-            plans.forEach(plan => {
-                const a = sub.all?.[plan] || {count: 0, pct: 0};
-                const m = sub.marketplace?.[plan] || {count: 0, pct: 0};
-                const c = sub.custom?.[plan] || {count: 0, pct: 0};
-
-                const row = document.createElement("tr");
-                row.innerHTML = `
-                    <td>${planLabels[plan] || plan}</td>
-                    <td>${a.count} (${a.pct}%)</td>
-                    <td>${m.count} (${m.pct}%)</td>
-                    <td>${c.count} (${c.pct}%)</td>
-                `;
-                tbodySub.appendChild(row);
-            });
-        }
 
     } catch (err) {
         console.error(err);
@@ -206,13 +347,55 @@ async function loadStats() {
 
 loadStats();
 
-// --- tab switching -----------------------------------------------------
+// --- refresh logic -------------------------------------------------------
+
+document.getElementById("refresh-btn").addEventListener("click", async () => {
+    const status = document.getElementById("refresh-status");
+    const spinner = document.getElementById("spinner");
+
+    const oldTime = document.getElementById("last-updated").textContent;
+    spinner.classList.remove("hidden");
+    status.textContent = "Refreshing...";
+
+    const resp = await fetch("/refresh", {
+        method: "POST",
+        credentials: "include"
+    });
+
+    const data = await resp.json();
+
+    if (data.status !== "ok") {
+        status.textContent = data.message;
+        spinner.classList.add("hidden");
+        return;
+    }
+
+    status.textContent = "Refresh started — updating shortly...";
+
+    // Poll until cache updates
+    const poll = setInterval(async () => {
+        const r = await fetch("/stats", { credentials: "include" });
+        const stats = await r.json();
+        const newTime = "Last updated: " + new Date(stats.last_updated).toLocaleString();
+
+        if (newTime !== oldTime) {
+            clearInterval(poll);
+            spinner.classList.add("hidden");
+            status.textContent = "";
+            loadStats();
+        }
+    }, 2000);
+});
+
+// --- tab handling ---------------------------------------------------------
+
 document.querySelectorAll(".tab-btn").forEach(btn => {
     btn.addEventListener("click", () => {
         document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
         btn.classList.add("active");
 
         const tab = btn.dataset.tab;
+
         document.querySelectorAll(".tab-content").forEach(c => c.classList.add("hidden"));
         document.getElementById("tab-" + tab).classList.remove("hidden");
     });
