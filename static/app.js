@@ -279,22 +279,22 @@ async function loadStats() {
 
         document.getElementById("content").classList.remove("hidden");
 
-        // BASIC COUNTS
+        // BASIC COUNTS (GENERAL TAB)
         document.getElementById("total-apps").textContent = data.total_apps;
         document.getElementById("marketplace-apps").textContent = data.marketplace_apps;
         document.getElementById("custom-apps").textContent = data.custom_apps;
         document.getElementById("unique-owners").textContent = data.unique_owners;
 
-        // PERCENTAGES
+        // PERCENTAGES (GENERAL TAB)
         document.getElementById("marketplace-pct").textContent = data.marketplace_pct + "%";
         document.getElementById("custom-pct").textContent = data.custom_pct + "%";
 
-        // INSTANCES
+        // INSTANCES (GENERAL TAB)
         document.getElementById("total-instances").textContent = data.total_instances;
         document.getElementById("company-deployments").textContent = data.company_deployments;
         document.getElementById("company-instances").textContent = data.company_instances;
 
-        // CONTACTS
+        // CONTACTS (GENERAL TAB)
         document.getElementById("marketplace-with-contacts").textContent = data.marketplace_with_contacts;
         document.getElementById("marketplace-contact-pct").textContent = data.marketplace_contact_pct + "%";
         document.getElementById("total-with-contacts").textContent = data.total_with_contacts;
@@ -302,11 +302,44 @@ async function loadStats() {
         document.getElementById("custom-with-contacts").textContent = data.custom_with_contacts;
         document.getElementById("custom-contact-pct").textContent = data.custom_contact_pct + "%";
 
-        // secrets & static ip
+        // secrets & static ip (GENERAL TAB)
         document.getElementById("total-with-secrets").textContent = data.total_with_secrets;
         document.getElementById("total-with-staticip").textContent = data.total_with_staticip;
         document.getElementById("marketplace-with-secrets").textContent = data.marketplace_with_secrets;
         document.getElementById("marketplace-with-staticip").textContent = data.marketplace_with_staticip;
+
+        // -------------------------------
+        // NEW: FINANCES TAB MIRROR METRICS
+        // -------------------------------
+        const finTotalAppsEl = document.getElementById("fin-total-apps");
+        if (finTotalAppsEl) {
+            finTotalAppsEl.textContent = data.total_apps;
+        }
+
+        const finMarketplaceAppsEl = document.getElementById("fin-marketplace-apps");
+        if (finMarketplaceAppsEl) {
+            finMarketplaceAppsEl.textContent = data.marketplace_apps;
+        }
+
+        const finCustomAppsEl = document.getElementById("fin-custom-apps");
+        if (finCustomAppsEl) {
+            finCustomAppsEl.textContent = data.custom_apps;
+        }
+
+        const finMarketplacePctEl = document.getElementById("fin-marketplace-pct");
+        if (finMarketplacePctEl) {
+            finMarketplacePctEl.textContent = data.marketplace_pct + "%";
+        }
+
+        const finCustomPctEl = document.getElementById("fin-custom-pct");
+        if (finCustomPctEl) {
+            finCustomPctEl.textContent = data.custom_pct + "%";
+        }
+
+        const finCompanyDeploymentsEl = document.getElementById("fin-company-deployments");
+        if (finCompanyDeploymentsEl) {
+            finCompanyDeploymentsEl.textContent = data.company_deployments;
+        }
 
         // RESOURCES (real usage + per-tier + tier utilization + charts)
         fillResources(data);
