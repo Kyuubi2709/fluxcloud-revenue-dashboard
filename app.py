@@ -37,11 +37,6 @@ TIER_HW = {
 # Approx blocks per month (30s block time, 30 days)
 BLOCKS_PER_MONTH = 86400
 
-# Address used when company deploys on behalf of users (FIAT payments)
-FIAT_DEPLOYER_ADDRESSES = {
-    "t1XktDZ9Z1QiefMYE5nMFohe8VG2c2BD5A5"
-}
-
 BASE_DIR = os.path.dirname(__file__)
 CACHE_FILE = os.path.join(BASE_DIR, "cache", "stats.json")
 ACCOUNTS_CSV = os.path.join(BASE_DIR, "accounts.csv")
@@ -136,12 +131,12 @@ def load_accounts_from_csv():
 
 
 # ---------------------------
-# PRICE.JSON HELPER
+# PRICE.JSON HELPER (fallback)
 # ---------------------------
 def load_price_config():
     """
-    Load price.json which maps base marketplace app names (no timestamp)
-    to USD price per month.
+    Fallback loader for price.json (used only if price_map
+    is not provided by update_cache).
 
       {
         "KaspaNode16GB": 27.2,
@@ -174,10 +169,38 @@ def load_price_config():
 # ---------------------------
 # ANALYTICS ENGINE
 # ---------------------------
-def analyze_apps(apps, nodes, locations=None, permanent_messages=None, accounts_csv_path=None):
+def analyze_apps(
+    apps,
+    nodes,
+    locations=None,
+    perm_messages=None,
+    price_map=None,
+    fiat_txids=None,
+):
+    """
+    Main analytics function.
+
+    Called from update_cache.update_cache with:
+        analyze_apps(apps, nodes, locations, perm_messages, price_map, fiat_txids)
+
+    - apps: list from globalappsspecifications
+    - nodes: deterministic node list
+    - locations: apps/locations result
+    - perm_messages: dict { app_name: [pm1, pm2, ...] }
+    - price_map: dict { base_app_name: monthly_price_usd }
+    - fiat_txids: set of txids where the FIAT wallet participates
+    """
     apps = [a for a in apps if isinstance(a, dict)]
     nodes = [n for n in nodes if isinstance(n, dict)]
     locations = [l for l in (locations or []) if isinstance(l, dict)]
+    perm_messages = perm_messages or {}
+    fiat_txids = fiat_txids or set()
+
+    # Use price_map passed from update_cache if available; otherwise fallback
+    if isinstance(price_map, dict):
+        price_cfg = price_map
+    else:
+        price_cfg = load_price_config()
 
     total = len(apps)
     marketplace = []
@@ -267,7 +290,11 @@ def analyze_apps(apps, nodes, locations=None, permanent_messages=None, accounts_
             hdd_gb = float(app_info.get("hdd", 0) or 0)
 
         if name:
-            app_resource_map[name] = {"cpu": cpu_per_inst, "ram_mb": ram_mb, "hdd_gb": hdd_gb}
+            app_resource_map[name] = {
+                "cpu": cpu_per_inst,
+                "ram_mb": ram_mb,
+                "hdd_gb": hdd_gb,
+            }
 
         total_cpu += cpu_per_inst * instances
         total_ram_mb += ram_mb * instances
@@ -319,8 +346,14 @@ def analyze_apps(apps, nodes, locations=None, permanent_messages=None, accounts_
     custom_pct = round((len(custom) / total) * 100, 2) if total else 0
 
     total_contact_pct = round((total_with_contacts / total) * 100, 2) if total else 0
-    marketplace_contact_pct = round((marketplace_with_contacts / len(marketplace)) * 100, 2) if marketplace else 0
-    custom_contact_pct = round((custom_with_contacts / len(custom)) * 100, 2) if custom else 0
+    marketplace_contact_pct = (
+        round((marketplace_with_contacts / len(marketplace)) * 100, 2)
+        if marketplace else 0
+    )
+    custom_contact_pct = (
+        round((custom_with_contacts / len(custom)) * 100, 2)
+        if custom else 0
+    )
 
     total_ram_gb = total_ram_mb / 1024 if total_ram_mb else 0
     network_total_ram_tb = (network_total_ram_gb / 1000) if network_total_ram_gb else 0
@@ -347,7 +380,10 @@ def analyze_apps(apps, nodes, locations=None, permanent_messages=None, accounts_
     resources_total_ram_mb_used = 0.0
     resources_total_hdd_gb_used = 0.0
 
-    resources_tier_usage = {t: {"instances": 0, "cpu": 0, "ram_gb": 0, "hdd_gb": 0} for t in TIER_HW}
+    resources_tier_usage = {
+        t: {"instances": 0, "cpu": 0, "ram_gb": 0, "hdd_gb": 0}
+        for t in TIER_HW
+    }
     resources_tier_usage["UNKNOWN"] = {"instances": 0, "cpu": 0, "ram_gb": 0, "hdd_gb": 0}
 
     # Track nodes running at least one instance
@@ -385,9 +421,18 @@ def analyze_apps(apps, nodes, locations=None, permanent_messages=None, accounts_
         resources_total_ram_mb_used / 1024 if resources_total_ram_mb_used else 0
     )
 
-    resources_cpu_util_pct = round((resources_total_cpu_used / network_total_cpu) * 100, 2) if network_total_cpu else 0
-    resources_ram_util_pct = round((resources_total_ram_gb_used / network_total_ram_gb) * 100, 2) if network_total_ram_gb else 0
-    resources_hdd_util_pct = round((resources_total_hdd_gb_used / network_total_hdd_gb) * 100, 2) if network_total_hdd_gb else 0
+    resources_cpu_util_pct = (
+        round((resources_total_cpu_used / network_total_cpu) * 100, 2)
+        if network_total_cpu else 0
+    )
+    resources_ram_util_pct = (
+        round((resources_total_ram_gb_used / network_total_ram_gb) * 100, 2)
+        if network_total_ram_gb else 0
+    )
+    resources_hdd_util_pct = (
+        round((resources_total_hdd_gb_used / network_total_hdd_gb) * 100, 2)
+        if network_total_hdd_gb else 0
+    )
 
     resources_tier_usage_out = {
         tier: {
@@ -423,7 +468,7 @@ def analyze_apps(apps, nodes, locations=None, permanent_messages=None, accounts_
         tier_node_usage[tier] = {
             "used_nodes": used,
             "total_nodes": total_nodes,
-            "pct": pct
+            "pct": pct,
         }
 
     # =========================================================================
@@ -439,15 +484,20 @@ def analyze_apps(apps, nodes, locations=None, permanent_messages=None, accounts_
     appleid_app_owners = len(appleid_owner_ids)
 
     # =========================================================================
-    # NEW: REVENUE METRICS (USD, based on price.json + expire)
+    # NEW: REVENUE METRICS
+    #
+    # - Marketplace: USD via price.json + expire (current behavior)
+    # - Custom:    FLUX only (valueSat → FLUX), USD = 0 for now
+    # - FIAT vs FLUX USD classification for marketplace using fiat_txids
     # =========================================================================
-    price_cfg = load_price_config()
-
     total_revenue_usd = 0.0
     flux_revenue_usd = 0.0
     fiat_revenue_usd = 0.0
     marketplace_revenue_usd = 0.0
-    custom_revenue_usd = 0.0
+    custom_revenue_usd = 0.0  # always 0 in Option C
+
+    # New: custom revenue in FLUX (coin units)
+    custom_revenue_flux = 0.0
 
     revenue_by_owner = defaultdict(float)
 
@@ -462,46 +512,74 @@ def analyze_apps(apps, nodes, locations=None, permanent_messages=None, accounts_
         except Exception:
             expire_blocks = 0
 
-        # Only priced apps contribute to revenue
-        base_name = TIMESTAMP_REGEX.sub("", name)
-        price_month = price_cfg.get(base_name)
-
-        if not price_month:
-            continue  # no price defined yet
-
-        # Approx months purchased from expire
-        months = (expire_blocks / BLOCKS_PER_MONTH) if expire_blocks > 0 else 0.0
-        if months <= 0:
-            continue
-
-        try:
-            price_month = float(price_month)
-        except Exception:
-            continue
-
-        revenue_usd = price_month * months
-
-        total_revenue_usd += revenue_usd
-        revenue_by_owner[owner] += revenue_usd
-
         is_marketplace = bool(TIMESTAMP_REGEX.search(name))
+        base_name = TIMESTAMP_REGEX.sub("", name)
+
+        # Latest permanent message for this app (if any)
+        pm_list = perm_messages.get(name) or []
+        latest_pm = None
+        if pm_list and isinstance(pm_list, list):
+            latest_pm = max(
+                (pm for pm in pm_list if isinstance(pm, dict)),
+                key=lambda m: m.get("height", 0) or 0,
+                default=None,
+            )
+
+        txid = None
+        value_sat = 0
+        if latest_pm:
+            txid = latest_pm.get("txid") or latest_pm.get("transactionHash")
+            # permanentmessages usually contain valueSat for the payment
+            raw_val = latest_pm.get("valueSat", latest_pm.get("value", 0))
+            try:
+                value_sat = int(raw_val or 0)
+            except Exception:
+                value_sat = 0
+
+        # ------------------------------------------------------------------
+        # 1) Marketplace revenue in USD (from price.json + expire)
+        # ------------------------------------------------------------------
         if is_marketplace:
-            marketplace_revenue_usd += revenue_usd
-        else:
-            custom_revenue_usd += revenue_usd
+            price_month = price_cfg.get(base_name)
+            if price_month:
+                try:
+                    price_month = float(price_month)
+                except Exception:
+                    price_month = 0.0
 
-        if owner in FIAT_DEPLOYER_ADDRESSES:
-            fiat_revenue_usd += revenue_usd
-        else:
-            flux_revenue_usd += revenue_usd
+            if price_month and expire_blocks > 0:
+                months = expire_blocks / BLOCKS_PER_MONTH
+                if months > 0:
+                    revenue_usd = price_month * months
 
-    # Top 5 paying owners by USD
+                    total_revenue_usd += revenue_usd
+                    marketplace_revenue_usd += revenue_usd
+                    revenue_by_owner[owner] += revenue_usd
+
+                    # Classify FIAT vs FLUX for USD revenue based on txid
+                    if txid and txid in fiat_txids:
+                        fiat_revenue_usd += revenue_usd
+                    else:
+                        flux_revenue_usd += revenue_usd
+
+        # ------------------------------------------------------------------
+        # 2) Custom apps: FLUX-only revenue from valueSat
+        #     - No USD conversion yet (Option C)
+        # ------------------------------------------------------------------
+        if not is_marketplace and value_sat > 0:
+            # valueSat is in satoshis → convert to FLUX
+            flux_amount = value_sat / 100_000_000.0
+            custom_revenue_flux += flux_amount
+
+    # Top 5 paying owners by USD (marketplace only, since custom USD = 0)
     top_paying_owners = []
     for owner, amt in sorted(revenue_by_owner.items(), key=lambda x: x[1], reverse=True)[:5]:
-        top_paying_owners.append({
-            "owner": owner,
-            "revenue_usd": round(amt, 2),
-        })
+        top_paying_owners.append(
+            {
+                "owner": owner,
+                "revenue_usd": round(amt, 2),
+            }
+        )
 
     return {
         "total_apps": total,
@@ -528,7 +606,7 @@ def analyze_apps(apps, nodes, locations=None, permanent_messages=None, accounts_
         "marketplace_with_secrets": marketplace_with_secrets,
         "marketplace_with_staticip": marketplace_with_staticip,
 
-        # NEW owner auth metrics
+        # Owner auth metrics
         "sso_owners": sso_owners,
         "appleid_app_owners": appleid_app_owners,
 
@@ -560,12 +638,16 @@ def analyze_apps(apps, nodes, locations=None, permanent_messages=None, accounts_
             {"name": n, "deployments": c} for n, c in top5
         ],
 
-        # NEW revenue metrics (USD)
+        # Revenue metrics (USD, marketplace-based)
         "total_revenue_usd": round(total_revenue_usd, 2),
         "flux_revenue_usd": round(flux_revenue_usd, 2),
         "fiat_revenue_usd": round(fiat_revenue_usd, 2),
         "marketplace_revenue_usd": round(marketplace_revenue_usd, 2),
-        "custom_revenue_usd": round(custom_revenue_usd, 2),
+        "custom_revenue_usd": round(custom_revenue_usd, 2),  # == 0 in Option C
+
+        # NEW: custom revenue in FLUX (coin units)
+        "custom_revenue_flux": round(custom_revenue_flux, 8),
+
         "top_paying_owners": top_paying_owners,
     }
 
