@@ -6,7 +6,7 @@ import threading
 import time
 import json
 import csv
-from collections import Counter
+from collections import Counter, defaultdict
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
 
@@ -21,7 +21,7 @@ LOGIN_PASS = "fluxcloud123"
 API_URL_APPS = "https://api.runonflux.io/apps/globalappsspecifications"
 API_URL_NODES = "https://api.runonflux.io/daemon/viewdeterministicfluxnodelist"
 
-# Marketplace app name pattern
+# Marketplace app name pattern (timestamp suffix)
 TIMESTAMP_REGEX = re.compile(r"\d{10,}$")
 
 # Your company Flux address
@@ -34,8 +34,18 @@ TIER_HW = {
     "STRATUS": {"cpu": 8, "ram_gb": 64, "hdd_gb": 880},
 }
 
-CACHE_FILE = "cache/stats.json"
-ACCOUNTS_CSV = os.path.join(os.path.dirname(__file__), "accounts.csv")
+# Approx blocks per month (30s block time, 30 days)
+BLOCKS_PER_MONTH = 86400
+
+# Address used when company deploys on behalf of users (FIAT payments)
+FIAT_DEPLOYER_ADDRESSES = {
+    "t1XktDZ9Z1QiefMYE5nMFohe8VG2c2BD5A5"
+}
+
+BASE_DIR = os.path.dirname(__file__)
+CACHE_FILE = os.path.join(BASE_DIR, "cache", "stats.json")
+ACCOUNTS_CSV = os.path.join(BASE_DIR, "accounts.csv")
+PRICE_JSON = os.path.join(BASE_DIR, "price.json")
 
 
 # ---------------------------
@@ -126,6 +136,42 @@ def load_accounts_from_csv():
 
 
 # ---------------------------
+# PRICE.JSON HELPER
+# ---------------------------
+def load_price_config():
+    """
+    Load price.json which maps base marketplace app names (no timestamp)
+    to USD price per month.
+
+      {
+        "KaspaNode16GB": 27.2,
+        "KaspaNode24GB": 31.2,
+        ...
+      }
+
+    We also strip C-style /* ... */ and // comments if present.
+    """
+    if not os.path.exists(PRICE_JSON):
+        return {}
+
+    try:
+        with open(PRICE_JSON, "r", encoding="utf-8") as f:
+            text = f.read()
+
+        # Strip /* ... */ comments
+        text = re.sub(r"/\*.*?\*/", "", text, flags=re.S)
+        # Strip // comments to end of line
+        text = re.sub(r"//.*", "", text)
+
+        data = json.loads(text)
+        if isinstance(data, dict):
+            return data
+        return {}
+    except Exception:
+        return {}
+
+
+# ---------------------------
 # ANALYTICS ENGINE
 # ---------------------------
 def analyze_apps(apps, nodes, locations=None, permanent_messages=None, accounts_csv_path=None):
@@ -160,8 +206,6 @@ def analyze_apps(apps, nodes, locations=None, permanent_messages=None, accounts_
     node_tier_map = {}
     tier_capacity = {tier: {"nodes": 0, "cpu": 0, "ram_gb": 0, "hdd_gb": 0} for tier in TIER_HW}
 
-    tier_usage = {tier: {"instances": 0, "cpu": 0, "ram_gb": 0, "hdd_gb": 0} for tier in TIER_HW}
-
     # Build node tier mapping
     for node in nodes:
         ip = node.get("ip") or node.get("ipaddress") or ""
@@ -192,7 +236,9 @@ def analyze_apps(apps, nodes, locations=None, permanent_messages=None, accounts_
 
     app_resource_map = {}
 
-    # Process apps
+    # ----------------------------------------------------------------------
+    # PROCESS APPS: stats + build resource map
+    # ----------------------------------------------------------------------
     for app_info in apps:
         name = app_info.get("name", "")
         owner = app_info.get("owner", "")
@@ -392,6 +438,71 @@ def analyze_apps(apps, nodes, locations=None, permanent_messages=None, accounts_
     sso_owners = len(sso_owner_ids)
     appleid_app_owners = len(appleid_owner_ids)
 
+    # =========================================================================
+    # NEW: REVENUE METRICS (USD, based on price.json + expire)
+    # =========================================================================
+    price_cfg = load_price_config()
+
+    total_revenue_usd = 0.0
+    flux_revenue_usd = 0.0
+    fiat_revenue_usd = 0.0
+    marketplace_revenue_usd = 0.0
+    custom_revenue_usd = 0.0
+
+    revenue_by_owner = defaultdict(float)
+
+    for app_info in apps:
+        name = app_info.get("name", "")
+        owner = app_info.get("owner", "") or ""
+        expire_blocks = app_info.get("expire", 0)
+
+        # Normalize expire to int
+        try:
+            expire_blocks = int(expire_blocks or 0)
+        except Exception:
+            expire_blocks = 0
+
+        # Only priced apps contribute to revenue
+        base_name = TIMESTAMP_REGEX.sub("", name)
+        price_month = price_cfg.get(base_name)
+
+        if not price_month:
+            continue  # no price defined yet
+
+        # Approx months purchased from expire
+        months = (expire_blocks / BLOCKS_PER_MONTH) if expire_blocks > 0 else 0.0
+        if months <= 0:
+            continue
+
+        try:
+            price_month = float(price_month)
+        except Exception:
+            continue
+
+        revenue_usd = price_month * months
+
+        total_revenue_usd += revenue_usd
+        revenue_by_owner[owner] += revenue_usd
+
+        is_marketplace = bool(TIMESTAMP_REGEX.search(name))
+        if is_marketplace:
+            marketplace_revenue_usd += revenue_usd
+        else:
+            custom_revenue_usd += revenue_usd
+
+        if owner in FIAT_DEPLOYER_ADDRESSES:
+            fiat_revenue_usd += revenue_usd
+        else:
+            flux_revenue_usd += revenue_usd
+
+    # Top 5 paying owners by USD
+    top_paying_owners = []
+    for owner, amt in sorted(revenue_by_owner.items(), key=lambda x: x[1], reverse=True)[:5]:
+        top_paying_owners.append({
+            "owner": owner,
+            "revenue_usd": round(amt, 2),
+        })
+
     return {
         "total_apps": total,
         "marketplace_apps": len(marketplace),
@@ -448,6 +559,14 @@ def analyze_apps(apps, nodes, locations=None, permanent_messages=None, accounts_
         "top_marketplace_apps": [
             {"name": n, "deployments": c} for n, c in top5
         ],
+
+        # NEW revenue metrics (USD)
+        "total_revenue_usd": round(total_revenue_usd, 2),
+        "flux_revenue_usd": round(flux_revenue_usd, 2),
+        "fiat_revenue_usd": round(fiat_revenue_usd, 2),
+        "marketplace_revenue_usd": round(marketplace_revenue_usd, 2),
+        "custom_revenue_usd": round(custom_revenue_usd, 2),
+        "top_paying_owners": top_paying_owners,
     }
 
 
@@ -478,7 +597,7 @@ def refresh():
     if not session.get("logged_in"):
         return jsonify({"status": "unauthorized"}), 403
 
-    last_refresh_file = "cache/last_refresh.txt"
+    last_refresh_file = os.path.join(BASE_DIR, "cache", "last_refresh.txt")
     now = time.time()
     cooldown = 60 * 15  # 15 minutes
 
@@ -488,6 +607,7 @@ def refresh():
             remaining = int(cooldown - (now - last_refresh))
             return jsonify({"status": "cooldown", "message": f"Try again in {remaining}s"})
 
+    os.makedirs(os.path.dirname(last_refresh_file), exist_ok=True)
     with open(last_refresh_file, "w") as f:
         f.write(str(now))
 
@@ -495,7 +615,7 @@ def refresh():
         from update_cache import update_cache
         update_cache()
 
-    threading.Thread(target=background).start()
+    threading.Thread(target=background, daemon=True).start()
     return jsonify({"status": "ok", "message": "Refresh started"})
 
 
