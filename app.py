@@ -1,4 +1,3 @@
-
 from flask import Flask, jsonify, render_template, request, redirect, url_for, session
 import requests
 import re
@@ -82,10 +81,19 @@ def fetch_nodes():
 # ---------------------------
 # ANALYTICS ENGINE
 # ---------------------------
-def analyze_apps(apps, nodes, locations=None):
+def analyze_apps(apps, nodes, locations=None, permanent_messages=None):
+    """
+    Main analytics function.
+
+    apps: current apps from globalappsspecifications
+    nodes: deterministic node list
+    locations: running app locations (from /apps/locations)
+    permanent_messages: historical app messages (from /apps/permanentmessages)
+    """
     apps = [a for a in apps if isinstance(a, dict)]
     nodes = [n for n in nodes if isinstance(n, dict)]
     locations = [l for l in (locations or []) if isinstance(l, dict)]
+    permanent_messages = [m for m in (permanent_messages or []) if isinstance(m, dict)]
 
     total = len(apps)
     marketplace = []
@@ -105,10 +113,20 @@ def analyze_apps(apps, nodes, locations=None):
     marketplace_with_staticip = 0
 
     unique_owners = set()
+    owners_ever = set()  # LIFETIME owners
 
     total_cpu = 0.0
     total_ram_mb = 0.0
     total_hdd_gb = 0.0
+
+    # ----------------------------------------------------
+    # LIFETIME OWNERS FROM permanentmessages
+    # ----------------------------------------------------
+    for msg in permanent_messages:
+        app_spec = msg.get("appSpecifications") or {}
+        owner_pm = app_spec.get("owner")
+        if owner_pm:
+            owners_ever.add(owner_pm)
 
     # Node tier map and capacity
     node_tier_map = {}
@@ -146,7 +164,7 @@ def analyze_apps(apps, nodes, locations=None):
 
     app_resource_map = {}
 
-    # Process apps
+    # Process apps (current state)
     for app_info in apps:
         name = app_info.get("name", "")
         owner = app_info.get("owner", "")
@@ -218,6 +236,10 @@ def analyze_apps(apps, nodes, locations=None):
             custom.append(name)
             if has_contacts:
                 custom_with_contacts += 1
+
+    # Combine current owners into the lifetime set as a safety net
+    owners_ever.update(unique_owners)
+    lifetime_owners_count = len(owners_ever)
 
     # Top marketplace grouped
     base_names = [TIMESTAMP_REGEX.sub("", n) for n in marketplace]
@@ -320,7 +342,7 @@ def analyze_apps(apps, nodes, locations=None):
         }
 
     # =========================================================================
-    # NEW: TIER NODE UTILIZATION (for pie chart)
+    # TIER NODE UTILIZATION (for pie chart)
     # =========================================================================
     tier_node_usage = {}
     for tier in TIER_HW:
@@ -338,7 +360,12 @@ def analyze_apps(apps, nodes, locations=None):
         "total_apps": total,
         "marketplace_apps": len(marketplace),
         "custom_apps": len(custom),
+
+        # current state owners
         "unique_owners": len(unique_owners),
+
+        # NEW: lifetime owners (ever registered)
+        "lifetime_owners": lifetime_owners_count,
 
         "marketplace_pct": marketplace_pct,
         "custom_pct": custom_pct,
@@ -381,8 +408,6 @@ def analyze_apps(apps, nodes, locations=None):
         "resources_tier_usage": resources_tier_usage_out,
 
         "tier_utilization": tier_utilization,
-
-        # NEW!
         "tier_node_usage": tier_node_usage,
 
         "top_marketplace_apps": [
