@@ -2,12 +2,14 @@ import os
 import json
 import time
 import requests
-from analyze_fluxcloud import API_URL as APPS_API_URL
+from analyze_fluxcloud import API_URL as APPS_API_URL  # existing import
 
 # Existing APIs
 NODES_API_URL = "https://api.runonflux.io/daemon/viewdeterministicfluxnodelist"
 # New locations API
 LOCATIONS_API_URL = "https://api.runonflux.io/apps/locations"
+# NEW: permanent messages API (historical app registrations/updates)
+PERM_MSG_API_URL = "https://api.runonflux.io/apps/permanentmessages"
 
 CACHE_DIR = "/app/cache"
 CACHE_FILE = os.path.join(CACHE_DIR, "stats.json")
@@ -44,6 +46,20 @@ def fetch_locations():
         return []
 
 
+def fetch_permanent_messages():
+    """
+    Fetch historical Flux app messages (register/update).
+    Used to compute LIFETIME app owners.
+    """
+    try:
+        resp = requests.get(PERM_MSG_API_URL, timeout=30)
+        resp.raise_for_status()
+        data = resp.json()
+        return data.get("data", [])
+    except Exception:
+        return []
+
+
 def update_cache():
     """Fetch fresh stats and write them into the cache file."""
     print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Updating cache...")
@@ -52,10 +68,11 @@ def update_cache():
         apps = fetch_apps()
         nodes = fetch_nodes()
         locations = fetch_locations()
+        perm_msgs = fetch_permanent_messages()
 
-        # Run main analytics from app.py (now accepts locations as 3rd arg)
+        # Run main analytics from app.py (now accepts locations and permanent messages)
         from app import analyze_apps as full_analyzer
-        stats = full_analyzer(apps, nodes, locations)
+        stats = full_analyzer(apps, nodes, locations, perm_msgs)
 
         # Add timestamp
         stats["last_updated"] = int(time.time() * 1000)
