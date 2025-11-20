@@ -431,6 +431,55 @@
 
     </div>
 
+    <h2>Revenue (Estimated, USD)</h2>
+    <p class="section-subtitle">
+        Based on marketplace pricing (price.json) and subscription duration (expire).
+    </p>
+
+    <div class="stat-grid">
+
+        <div class="stat-box">
+            <h3>Total Revenue</h3>
+            <p id="rev-total-usd">–</p>
+        </div>
+
+        <div class="stat-box">
+            <h3>Flux Revenue</h3>
+            <p id="rev-flux-usd">–</p>
+        </div>
+
+        <div class="stat-box">
+            <h3>FIAT Revenue</h3>
+            <p id="rev-fiat-usd">–</p>
+        </div>
+
+        <div class="stat-box">
+            <h3>Marketplace Revenue</h3>
+            <p id="rev-marketplace-usd">–</p>
+        </div>
+
+        <div class="stat-box">
+            <h3>Custom Revenue</h3>
+            <p id="rev-custom-usd">–</p>
+        </div>
+
+    </div>
+
+    <h2>Top Paying Owners</h2>
+    <p class="section-subtitle">
+        Owners ranked by total estimated revenue across their live apps.
+    </p>
+
+    <table id="top-owners-table">
+        <thead>
+            <tr>
+                <th>Owner (Flux ID)</th>
+                <th>Revenue (USD)</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+
 </div>
 
 <script src="/static/app.js"></script>
