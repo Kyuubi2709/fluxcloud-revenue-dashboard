@@ -285,12 +285,6 @@ async function loadStats() {
         document.getElementById("custom-apps").textContent = data.custom_apps;
         document.getElementById("unique-owners").textContent = data.unique_owners;
 
-        // NEW: lifetime app owners
-        const lifetimeEl = document.getElementById("lifetime-owners");
-        if (lifetimeEl && typeof data.lifetime_owners !== "undefined") {
-            lifetimeEl.textContent = data.lifetime_owners;
-        }
-
         // PERCENTAGES (GENERAL TAB)
         document.getElementById("marketplace-pct").textContent = data.marketplace_pct + "%";
         document.getElementById("custom-pct").textContent = data.custom_pct + "%";
@@ -314,8 +308,12 @@ async function loadStats() {
         document.getElementById("marketplace-with-secrets").textContent = data.marketplace_with_secrets;
         document.getElementById("marketplace-with-staticip").textContent = data.marketplace_with_staticip;
 
+        // NEW: auth-related owner metrics
+        document.getElementById("sso-owners").textContent = data.sso_owners ?? 0;
+        document.getElementById("appleid-app-owners").textContent = data.appleid_app_owners ?? 0;
+
         // -------------------------------
-        // FINANCES TAB MIRROR METRICS
+        // NEW: FINANCES TAB MIRROR METRICS
         // -------------------------------
         const finTotalAppsEl = document.getElementById("fin-total-apps");
         if (finTotalAppsEl) {
