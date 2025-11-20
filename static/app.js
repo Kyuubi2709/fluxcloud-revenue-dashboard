@@ -11,6 +11,11 @@ function formatTB(val) {
     return Number(val).toFixed(2) + " TB";
 }
 
+function formatUSD(val) {
+    if (val === null || val === undefined || isNaN(val)) return "–";
+    return "$" + Number(val).toFixed(2);
+}
+
 // --- Chart.js globals ----------------------------------------------------
 
 let cpuUtilChart = null;
@@ -58,7 +63,7 @@ function renderUtilizationDonuts(data) {
     const freeColor = "#E0E0E0";
 
     // Helper to create/update a donut
-    function upsertDonut(existing, canvasId, usedPct, label) {
+    function upsertDonut(existing, canvasId, usedPct) {
         const ctx = document.getElementById(canvasId);
         if (!ctx) return existing;
 
@@ -104,9 +109,9 @@ function renderUtilizationDonuts(data) {
         });
     }
 
-    cpuUtilChart = upsertDonut(cpuUtilChart, "cpuUtilChart", usedCpuPct, "CPU");
-    ramUtilChart = upsertDonut(ramUtilChart, "ramUtilChart", usedRamPct, "RAM");
-    hddUtilChart = upsertDonut(hddUtilChart, "hddUtilChart", usedHddPct, "Storage");
+    cpuUtilChart = upsertDonut(cpuUtilChart, "cpuUtilChart", usedCpuPct);
+    ramUtilChart = upsertDonut(ramUtilChart, "ramUtilChart", usedRamPct);
+    hddUtilChart = upsertDonut(hddUtilChart, "hddUtilChart", usedHddPct);
 }
 
 function renderTierNodesDonut(data) {
@@ -130,7 +135,7 @@ function renderTierNodesDonut(data) {
         centerEl.textContent = totalUsed ? `${totalUsed} nodes` : "No active nodes";
     }
 
-    const fmtNodeText = (tier, obj) => {
+    const fmtNodeText = (obj) => {
         const used = obj.used_nodes ?? 0;
         const total = obj.total_nodes ?? 0;
         const pct = obj.pct ?? 0;
@@ -142,9 +147,9 @@ function renderTierNodesDonut(data) {
     const nEl = document.getElementById("tier-nodes-nimbus");
     const sEl = document.getElementById("tier-nodes-stratus");
 
-    if (cEl) cEl.textContent = fmtNodeText("CUMULUS", cum);
-    if (nEl) nEl.textContent = fmtNodeText("NIMBUS", nim);
-    if (sEl) sEl.textContent = fmtNodeText("STRATUS", str);
+    if (cEl) cEl.textContent = fmtNodeText(cum);
+    if (nEl) nEl.textContent = fmtNodeText(nim);
+    if (sEl) sEl.textContent = fmtNodeText(str);
 
     const ctx = document.getElementById("tierNodesChart");
     if (!ctx) return;
@@ -367,14 +372,48 @@ async function loadStats() {
             document.getElementById(`network-${l}-hdd`).textContent = formatTB(c.hdd_tb);
         });
 
-        // TOP 5
+        // TOP 5 MARKETPLACE APPS
         const tbody = document.querySelector("#top5-table tbody");
         tbody.innerHTML = "";
-        data.top_marketplace_apps.forEach(app => {
+        (data.top_marketplace_apps || []).forEach(app => {
             const row = document.createElement("tr");
             row.innerHTML = `<td>${app.name}</td><td>${app.deployments}</td>`;
             tbody.appendChild(row);
         });
+
+        // -------------------------------
+        // NEW: REVENUE METRICS (FINANCES TAB)
+        // -------------------------------
+        const totalRevenueEl = document.getElementById("rev-total-usd");
+        const fluxRevenueEl = document.getElementById("rev-flux-usd");
+        const fiatRevenueEl = document.getElementById("rev-fiat-usd");
+        const mktRevenueEl = document.getElementById("rev-marketplace-usd");
+        const customRevenueEl = document.getElementById("rev-custom-usd");
+
+        if (totalRevenueEl) totalRevenueEl.textContent = formatUSD(data.total_revenue_usd);
+        if (fluxRevenueEl) fluxRevenueEl.textContent = formatUSD(data.flux_revenue_usd);
+        if (fiatRevenueEl) fiatRevenueEl.textContent = formatUSD(data.fiat_revenue_usd);
+        if (mktRevenueEl) mktRevenueEl.textContent = formatUSD(data.marketplace_revenue_usd);
+        if (customRevenueEl) customRevenueEl.textContent = formatUSD(data.custom_revenue_usd);
+
+        // TOP PAYING OWNERS TABLE
+        const ownersBody = document.querySelector("#top-owners-table tbody");
+        if (ownersBody) {
+            ownersBody.innerHTML = "";
+            (data.top_paying_owners || []).forEach(entry => {
+                const row = document.createElement("tr");
+                const owner = entry.owner || "–";
+                const rev = formatUSD(entry.revenue_usd);
+                row.innerHTML = `<td>${owner}</td><td>${rev}</td>`;
+                ownersBody.appendChild(row);
+            });
+
+            if (!data.top_paying_owners || data.top_paying_owners.length === 0) {
+                const row = document.createElement("tr");
+                row.innerHTML = `<td colspan="2">No revenue data (no priced apps or price.json empty).</td>`;
+                ownersBody.appendChild(row);
+            }
+        }
 
     } catch (err) {
         console.error(err);
@@ -411,15 +450,21 @@ document.getElementById("refresh-btn").addEventListener("click", async () => {
 
     // Poll until cache updates
     const poll = setInterval(async () => {
-        const r = await fetch("/stats", { credentials: "include" });
-        const stats = await r.json();
-        const newTime = "Last updated: " + new Date(stats.last_updated).toLocaleString();
+        try {
+            const r = await fetch("/stats", { credentials: "include" });
+            const stats = await r.json();
+            if (!stats.last_updated) return;
 
-        if (newTime !== oldTime) {
-            clearInterval(poll);
-            spinner.classList.add("hidden");
-            status.textContent = "";
-            loadStats();
+            const newTime = "Last updated: " + new Date(stats.last_updated).toLocaleString();
+
+            if (newTime !== oldTime) {
+                clearInterval(poll);
+                spinner.classList.add("hidden");
+                status.textContent = "";
+                loadStats();
+            }
+        } catch (e) {
+            console.error(e);
         }
     }, 2000);
 });
