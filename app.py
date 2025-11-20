@@ -128,7 +128,7 @@ def load_accounts_from_csv():
 # ---------------------------
 # ANALYTICS ENGINE
 # ---------------------------
-def analyze_apps(apps, nodes, locations=None):
+def analyze_apps(apps, nodes, locations=None, accounts_csv_path=None):
     apps = [a for a in apps if isinstance(a, dict)]
     nodes = [n for n in nodes if isinstance(n, dict)]
     locations = [l for l in (locations or []) if isinstance(l, dict)]
