@@ -5,6 +5,7 @@ import os
 import threading
 import time
 import json
+import csv
 from collections import Counter
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
@@ -34,6 +35,7 @@ TIER_HW = {
 }
 
 CACHE_FILE = "cache/stats.json"
+ACCOUNTS_CSV = os.path.join(os.path.dirname(__file__), "accounts.csv")
 
 
 # ---------------------------
@@ -74,26 +76,62 @@ def fetch_nodes():
         resp = requests.get(API_URL_NODES, timeout=20)
         resp.raise_for_status()
         return resp.json().get("data", [])
-    except:
+    except Exception:
         return []
+
+
+# ---------------------------
+# ACCOUNTS CSV HELPER
+# ---------------------------
+def load_accounts_from_csv():
+    """
+    Read accounts.csv and return:
+    - all_sso_flux_ids: set of all btcn_public values (non-NULL, non-empty)
+    - appleid_flux_ids: subset of btcn_public where email is an AppleID relay
+      (ends with '@privaterelay.appleid.com')
+    """
+    all_sso_flux_ids = set()
+    appleid_flux_ids = set()
+
+    if not os.path.exists(ACCOUNTS_CSV):
+        return all_sso_flux_ids, appleid_flux_ids
+
+    try:
+        with open(ACCOUNTS_CSV, newline="", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                email = (row.get("email") or "").strip().strip('"')
+                btcn = (row.get("btcn_public") or "").strip().strip('"')
+
+                # Normalise NULL values
+                if email.upper() == "NULL":
+                    email = ""
+                if btcn.upper() == "NULL":
+                    btcn = ""
+
+                if not email and not btcn:
+                    continue
+
+                if btcn:
+                    all_sso_flux_ids.add(btcn)
+
+                    if email.endswith("@privaterelay.appleid.com"):
+                        appleid_flux_ids.add(btcn)
+
+    except Exception:
+        # Fail quietly; metrics will just be zero
+        return set(), set()
+
+    return all_sso_flux_ids, appleid_flux_ids
 
 
 # ---------------------------
 # ANALYTICS ENGINE
 # ---------------------------
-def analyze_apps(apps, nodes, locations=None, permanent_messages=None):
-    """
-    Main analytics function.
-
-    apps: current apps from globalappsspecifications
-    nodes: deterministic node list
-    locations: running app locations (from /apps/locations)
-    permanent_messages: historical app messages (from /apps/permanentmessages)
-    """
+def analyze_apps(apps, nodes, locations=None):
     apps = [a for a in apps if isinstance(a, dict)]
     nodes = [n for n in nodes if isinstance(n, dict)]
     locations = [l for l in (locations or []) if isinstance(l, dict)]
-    permanent_messages = [m for m in (permanent_messages or []) if isinstance(m, dict)]
 
     total = len(apps)
     marketplace = []
@@ -113,20 +151,10 @@ def analyze_apps(apps, nodes, locations=None, permanent_messages=None):
     marketplace_with_staticip = 0
 
     unique_owners = set()
-    owners_ever = set()  # LIFETIME owners
 
     total_cpu = 0.0
     total_ram_mb = 0.0
     total_hdd_gb = 0.0
-
-    # ----------------------------------------------------
-    # LIFETIME OWNERS FROM permanentmessages
-    # ----------------------------------------------------
-    for msg in permanent_messages:
-        app_spec = msg.get("appSpecifications") or {}
-        owner_pm = app_spec.get("owner")
-        if owner_pm:
-            owners_ever.add(owner_pm)
 
     # Node tier map and capacity
     node_tier_map = {}
@@ -164,7 +192,7 @@ def analyze_apps(apps, nodes, locations=None, permanent_messages=None):
 
     app_resource_map = {}
 
-    # Process apps (current state)
+    # Process apps
     for app_info in apps:
         name = app_info.get("name", "")
         owner = app_info.get("owner", "")
@@ -236,10 +264,6 @@ def analyze_apps(apps, nodes, locations=None, permanent_messages=None):
             custom.append(name)
             if has_contacts:
                 custom_with_contacts += 1
-
-    # Combine current owners into the lifetime set as a safety net
-    owners_ever.update(unique_owners)
-    lifetime_owners_count = len(owners_ever)
 
     # Top marketplace grouped
     base_names = [TIMESTAMP_REGEX.sub("", n) for n in marketplace]
@@ -356,16 +380,23 @@ def analyze_apps(apps, nodes, locations=None, permanent_messages=None):
             "pct": pct
         }
 
+    # =========================================================================
+    # NEW: SSO + AppleID metrics from accounts.csv
+    # =========================================================================
+    all_sso_flux_ids, appleid_flux_ids = load_accounts_from_csv()
+    flux_app_owners = unique_owners  # set of all owners of at least one app
+
+    sso_owner_ids = flux_app_owners.intersection(all_sso_flux_ids)
+    appleid_owner_ids = flux_app_owners.intersection(appleid_flux_ids)
+
+    sso_owners = len(sso_owner_ids)
+    appleid_app_owners = len(appleid_owner_ids)
+
     return {
         "total_apps": total,
         "marketplace_apps": len(marketplace),
         "custom_apps": len(custom),
-
-        # current state owners
         "unique_owners": len(unique_owners),
-
-        # NEW: lifetime owners (ever registered)
-        "lifetime_owners": lifetime_owners_count,
 
         "marketplace_pct": marketplace_pct,
         "custom_pct": custom_pct,
@@ -385,6 +416,10 @@ def analyze_apps(apps, nodes, locations=None, permanent_messages=None):
         "total_with_staticip": total_with_staticip,
         "marketplace_with_secrets": marketplace_with_secrets,
         "marketplace_with_staticip": marketplace_with_staticip,
+
+        # NEW owner auth metrics
+        "sso_owners": sso_owners,
+        "appleid_app_owners": appleid_app_owners,
 
         "total_cpu": round(total_cpu, 2),
         "total_ram_gb": round(total_ram_gb, 2),
@@ -431,7 +466,7 @@ def stats():
     try:
         with open(CACHE_FILE, "r") as f:
             return jsonify(json.load(f))
-    except:
+    except Exception:
         return jsonify({"error": "Cache unavailable"}), 500
 
 
