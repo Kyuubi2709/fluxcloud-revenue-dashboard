@@ -1,0 +1,13 @@
+{
+  "KaspaNode16GB": 27.2,
+  "KaspaNode24GB": 31.2,
+
+  "TimpiCollector": 3.30,
+  "TimpiGeocore": 9.10
+
+  /* Add more marketplace base names here:
+     - keys must be base app names AFTER stripping the timestamp
+       e.g. "KaspaNode16GB1760535952406" → "KaspaNode16GB"
+     - values are USD price per MONTH
+  */
+}
