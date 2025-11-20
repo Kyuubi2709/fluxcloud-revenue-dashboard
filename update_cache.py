@@ -94,7 +94,7 @@ def fetch_permanent_messages_for_app(app_name: str):
     return data
 
 
-defload_permanent_messages_for_apps(apps):
+def load_permanent_messages_for_apps(apps):
     """
     For all current live apps (from globalappsspecifications), fetch
     their permanent messages and return a dict:
