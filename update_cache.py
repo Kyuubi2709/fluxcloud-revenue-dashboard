@@ -10,7 +10,7 @@ from analyze_fluxcloud import API_URL as APPS_API_URL  # existing import
 NODES_API_URL = "https://api.runonflux.io/daemon/viewdeterministicfluxnodelist"
 LOCATIONS_API_URL = "https://api.runonflux.io/apps/locations"
 
-# New per-app permanent messages endpoint
+# Permanent messages endpoint (per app)
 PERM_MSG_API_URL = "https://api.runonflux.io/apps/permanentmessages"
 
 # Explorer endpoint for wallet tx history (FIAT wallet classification)
@@ -114,7 +114,6 @@ def load_permanent_messages_for_apps(apps):
 def load_price_map():
     """
     Load price.json → { base_app_name: monthly_price_usd }
-    (Currently not yet wired into analyze_apps, but ready for later.)
     """
     if not os.path.exists(PRICE_FILE):
         return {}
@@ -137,7 +136,7 @@ def load_price_map():
 def fetch_fiat_wallet_txids():
     """
     Fetch all txids where the FIAT wallet participates.
-    Prepared for later revenue classification logic.
+    Used to classify a permanent-message payment as FIAT-sourced.
     """
     try:
         resp = requests.get(
@@ -148,7 +147,11 @@ def fetch_fiat_wallet_txids():
         resp.raise_for_status()
         data = resp.json().get("data", {})
         txs = data.get("transactions", []) or []
-        txids = {tx.get("txid") for tx in txs if isinstance(tx, dict) and tx.get("txid")}
+        txids = {
+            tx.get("txid")
+            for tx in txs
+            if isinstance(tx, dict) and tx.get("txid")
+        }
         return txids
     except Exception:
         return set()
@@ -163,7 +166,7 @@ def update_cache():
         nodes = fetch_nodes()
         locations = fetch_locations()
 
-        # New (for future revenue work; currently not passed into analyze_apps)
+        # New: fetch permanent messages per app + price map + FIAT wallet txids
         perm_messages = load_permanent_messages_for_apps(apps)
         price_map = load_price_map()
         fiat_txids = fetch_fiat_wallet_txids()
@@ -171,16 +174,13 @@ def update_cache():
         # Run main analytics from app.py
         from app import analyze_apps as full_analyzer
 
-        # Your current analyze_apps signature is:
-        # def analyze_apps(apps, nodes, locations=None, permanent_messages=None, accounts_csv_path=None)
-        #
-        # We pass locations + perm_messages; accounts_csv_path is not used (CSV is read inside app.py).
         stats = full_analyzer(
             apps,
             nodes,
             locations,
             perm_messages,
-            None,   # accounts_csv_path (unused)
+            price_map,
+            fiat_txids,
         )
 
         # Add timestamp
