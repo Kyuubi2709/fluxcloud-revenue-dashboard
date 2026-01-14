@@ -49,6 +49,31 @@ if (typeof Chart !== "undefined") {
 }
 
 // -------------------------------------------------------------------------
+// NEW: ORBIT :latest COUNT LOADER (General tab box)
+// -------------------------------------------------------------------------
+async function loadOrbitLatestCount() {
+    const el = document.getElementById("orbit-latest-count");
+    if (!el) return;
+
+    el.textContent = "…";
+
+    try {
+        const resp = await fetch("/orbit-latest-count", { credentials: "include" });
+        const data = await resp.json();
+
+        if (!resp.ok || data.count === null || data.count === undefined) {
+            el.textContent = "ERR";
+            return;
+        }
+
+        el.textContent = data.count;
+    } catch (e) {
+        console.error(e);
+        el.textContent = "ERR";
+    }
+}
+
+// -------------------------------------------------------------------------
 // CHART RENDERING HELPERS
 // -------------------------------------------------------------------------
 
@@ -415,6 +440,9 @@ async function loadStats() {
             }
         }
 
+        // NEW: Load orbit repotag count (General tab)
+        loadOrbitLatestCount();
+
     } catch (err) {
         console.error(err);
         document.getElementById("loading").textContent = "Error loading data.";
@@ -461,7 +489,7 @@ document.getElementById("refresh-btn").addEventListener("click", async () => {
                 clearInterval(poll);
                 spinner.classList.add("hidden");
                 status.textContent = "";
-                loadStats();
+                loadStats(); // this will also reload orbit count
             }
         } catch (e) {
             console.error(e);
