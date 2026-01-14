@@ -1,4 +1,3 @@
-
 from flask import Flask, jsonify, render_template, request, redirect, url_for, session
 import requests
 import re
@@ -89,6 +88,42 @@ def fetch_nodes():
         return resp.json().get("data", [])
     except Exception:
         return []
+
+
+# ---------------------------
+# NEW: ORBIT TAG COUNTER HELPERS + ROUTE
+# ---------------------------
+def _count_orbit_latest(obj) -> int:
+    """
+    Count occurrences of exact string 'runonflux/orbit:latest'
+    anywhere in a nested JSON structure (dict/list/str).
+    """
+    target = "runonflux/orbit:latest"
+
+    if obj is None:
+        return 0
+    if isinstance(obj, str):
+        return 1 if obj == target else 0
+    if isinstance(obj, list):
+        return sum(_count_orbit_latest(x) for x in obj)
+    if isinstance(obj, dict):
+        return sum(_count_orbit_latest(v) for v in obj.values())
+    return 0
+
+
+@app.route("/orbit-latest-count")
+def orbit_latest_count():
+    if not session.get("logged_in"):
+        return jsonify({"status": "unauthorized"}), 403
+
+    try:
+        resp = requests.get(API_URL_APPS, timeout=20)
+        resp.raise_for_status()
+        payload = resp.json()
+        count = _count_orbit_latest(payload)
+        return jsonify({"repotag": "runonflux/orbit:latest", "count": count})
+    except Exception as e:
+        return jsonify({"repotag": "runonflux/orbit:latest", "count": None, "error": str(e)}), 502
 
 
 # ---------------------------
